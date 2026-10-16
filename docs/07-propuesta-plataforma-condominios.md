@@ -1,10 +1,12 @@
 # Propuesta preliminar para la plataforma de condominios
 
+> Actualización de alcance (16/10/2026): el equipo de cinco integrantes planifica los diez módulos y adaptación de autenticación en cuatro semanas. Se conserva el análisis técnico estático; esta corrección no implementa funcionalidades.
+
 ## Alcance y procedencia
 
 El Proyecto 1 de **Especificación de módulos y reglas del proyecto**, páginas 3-6, es la fuente de requisitos de negocio. Define Residente, Administrador y Personal de seguridad y diez módulos además de autenticación. El código actual solo aporta identidad y tokens; ver [resumen](00-resumen-ejecutivo.md). Esta propuesta no modifica código ni establece un schema definitivo.
 
-El PDF plantea diez equipos con módulos asignados y cuatro semanas de trabajo. El encargo adjunto identifica un equipo de cinco personas y solicita visión global. Hasta confirmar la asignación, el orden y reparto siguientes son opciones de coordinación; no constituyen compromiso de implementar los diez módulos ni un calendario acordado.
+El equipo confirma el alcance completo de diez módulos y adaptación de autenticación por cinco integrantes durante cuatro semanas. El reparto general de módulos entre diez equipos del PDF queda pendiente de aclaración con cátedra, manteniendo íntegro el alcance comunicado por el equipo. Reparto, esfuerzo y calendario siguen siendo propuestas sujetas a disponibilidad y aprobación.
 
 ## Requerimientos del Proyecto 1
 
@@ -70,21 +72,23 @@ Cuota, pago, área, reserva, incidencia, visita, paquete, asamblea, tema y voto 
 
 ## Orden recomendado de implementación futura
 
-1. **Confirmar alcance y contratos:** módulo asignado, roles, pertenencia, errores, identificación y dueño de cada entidad compartida. Registrar decisiones.
+1. **Ratificar criterios y contratos de los diez módulos:** alcance completo, roles, pertenencia, errores, identificación y dueño de cada entidad compartida. Registrar decisiones.
 2. **Cerrar un flujo vertical de autenticación:** puertos y URL, login, consulta del usuario, expiración/renovación y logout. El backend existente es reutilizable, con los riesgos descritos en [autenticación](04-autenticacion-backend.md).
 3. **Acordar la interfaz de notificaciones pronto:** destinatarios y evento mínimo antes de desarrollar sus productores. No obliga a construir todos los canales desde el inicio.
-4. **Implementar el módulo asignado:** una operación completa backend/base/frontend, con permisos, validaciones y criterios del PDF. Si el equipo coordina varios módulos, distribuirlos solo después de estabilizar los conceptos compartidos.
+4. **Implementar los diez módulos en paralelo coordinado:** cada dueño integra datos/backend/frontend, permisos y criterios del PDF después de estabilizar contratos comunes. No esperar a terminar un módulo para comenzar todos los demás.
 5. **Integrar módulos y reportes:** reportes después de disponer de datos y definiciones de saldos, ocupación e incidencias; verificar consistencia y autorización.
 6. **Preparar entrega académica:** revisión cruzada, README con nombres y roles confirmados, documentación de arquitectura, historial/PR internos y demo accesible a cátedra.
 
-No se requiere empezar por cuotas si el equipo recibe otro módulo. Tampoco se presupone cambiar ORM, adoptar Redux/Zustand, microservicios, una pasarela de pagos o eventos externos.
+Se propone iniciar contratos y bases comunes antes del desarrollo paralelo de los diez módulos; cuotas sigue dentro del alcance. Tampoco se presupone cambiar ORM, adoptar Redux/Zustand, microservicios, una pasarela de pagos o eventos externos.
 
 ## Organización sugerida para cinco desarrolladores
+
+Este reparto inicial por especialidad se conserva como alternativa de apoyo. La planificación integral local propone dueños verticales M1/M8 Armando, M2/M7 Heber, M6/M10 Guille, M3/M9 Serrato y M4/M5 Yael, con apoyo de especialidad y revisión cruzada; nadie integra o prueba toda la plataforma por su cuenta.
 
 | Integrante | Responsabilidad primaria propuesta | Revisión cruzada sugerida |
 |---|---|---|
 | Armando | Coordinación de contratos, integración y Git | Revisar API con Heber y despliegue con Yael |
-| Heber | Backend del módulo asignado y autorización | Revisar cambios de datos con Guille |
+| Heber | Backend de los diez módulos y autorización | Revisar cambios de datos con Guille |
 | Guille | Modelo de datos, migraciones y consistencia | Revisar contratos e invariantes con Heber |
 | Serrato | Frontend, formularios y experiencia de sesión | Revisar flujo completo con Armando |
 | Yael | QA, documentación y entorno/demo | Verificar criterios de aceptación con Serrato |
@@ -95,4 +99,4 @@ Son responsabilidades propuestas, no una asignación aprobada ni afirmación de 
 
 Resolver primero diferencias de URL y puertos, ausencia de roles y vínculo usuario/unidad, renovación de sesión y propiedad de migraciones. Después, acordar idempotencia de pagos/notificaciones, concurrencia de reservas y votos, estados de procesos, zona horaria, privacidad y definición de métricas. Estos son riesgos derivados de las necesidades del PDF, no funcionalidades del código actual.
 
-La primera reunión debe terminar con alcance asignado confirmado, matriz preliminar de permisos, contratos compartidos con responsables, elección razonada de sesión/estado frontend, criterios de aceptación y tareas pequeñas revisables. Registrar las preguntas pendientes para la cátedra; no tratar respuestas supuestas como requisitos obligatorios.
+La primera reunión debe terminar con alcance completo confirmado, matriz preliminar de permisos, contratos compartidos con responsables, elección razonada de sesión/estado frontend, criterios de aceptación y tareas pequeñas revisables. Registrar las preguntas pendientes para la cátedra; no tratar respuestas supuestas como requisitos obligatorios.

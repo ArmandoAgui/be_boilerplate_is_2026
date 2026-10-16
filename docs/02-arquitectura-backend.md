@@ -1,5 +1,7 @@
 # Arquitectura actual del backend
 
+> Actualización de alcance (16/10/2026): el equipo de cinco integrantes planifica los diez módulos y adaptación de autenticación en cuatro semanas. Se conserva el análisis técnico estático; esta corrección no implementa funcionalidades.
+
 ## Organización
 
 La aplicación es un monolito modular NestJS. [AppModule](../src/app.module.ts) importa ConfigModule global con caché y validación, PrismaModule, HealthModule, UsersModule y AuthModule. No se encontraron módulos de condominios ni servicios independientes desplegables por dominio.
@@ -67,4 +69,4 @@ Después del guard, el ValidationPipe global aplica transformación, whitelist y
 
 Los services y el guard lanzan excepciones Nest (`UnauthorizedException`, `ConflictException`); la validación puede rechazar con 400. No hay filters, interceptors ni middlewares propios registrados; las respuestas de errores dependen del manejo estándar de Nest, sin contrato personalizado uniforme para toda excepción. Los errores de base no traducidos no tienen mapeo propio y pueden terminar como 500.
 
-No se configura CORS en main. Tampoco hay autorización por roles, auditoría, rate limiting, colas, event bus, scheduler ni patrón outbox implementados. CQRS, microservicios, eventos de dominio o repositorios genéricos serían propuestas nuevas, no descripciones del boilerplate. Se recomienda conservar la organización actual como punto de partida y justificar cualquier ampliación con el módulo asignado.
+No se configura CORS en main. Tampoco hay autorización por roles, auditoría, rate limiting, colas, event bus, scheduler ni patrón outbox implementados. CQRS, microservicios, eventos de dominio o repositorios genéricos serían propuestas nuevas, no descripciones del boilerplate. Se recomienda conservar la organización actual como punto de partida y justificar cualquier ampliación con los módulos de la plataforma.

@@ -1,5 +1,7 @@
 # Riesgos y recomendaciones para comenzar
 
+> Actualización de alcance (16/10/2026): el equipo de cinco integrantes planifica los diez módulos y adaptación de autenticación en cuatro semanas. Se conserva el análisis técnico estático; esta corrección no implementa funcionalidades.
+
 Todos los puntos son hallazgos de lectura o propuestas; no se aplicaron correcciones al boilerplate. Prioridad alta significa resolver antes de depender del componente, no que se haya demostrado una explotación.
 
 ## Riesgos técnicos
@@ -36,7 +38,7 @@ Estos riesgos derivan de los criterios de éxito del Proyecto 1 (PDF, páginas 4
 
 ## Decisiones para la primera reunión
 
-1. Confirmar módulo asignado y responsabilidad de integrar con los demás equipos. La plataforma completa es el contexto; no se impone implementarla toda por cinco personas.
+1. Ratificar criterios de aceptación de los diez módulos y responsables de sus contratos internos. Consultar a cátedra la diferencia con su reparto general sin reducir el alcance del equipo.
 2. Acordar identidad, roles, pertenencia a unidad y límites entre condominios si aplica; designar responsable del contrato compartido.
 3. Elegir estrategia de sesión con Next y backend: validar usuario, renovar y revocar; decidir si el estado de UI necesita una biblioteca externa. Conservar Prisma y JWT inicialmente es una propuesta de menor alcance, no una obligación adicional de la cátedra.
 4. Acordar puertos, API_URL con prefijo, entornos y despliegue; usar el Compose provisto, como exige el PDF.
@@ -45,6 +47,6 @@ Estos riesgos derivan de los criterios de éxito del Proyecto 1 (PDF, páginas 4
 
 ## Flujo de trabajo propuesto
 
-Mantener ramas por tarea dentro de los forks, PR internos y revisión cruzada; no abrir PR a la cátedra. Registrar decisiones en ADR breves cuando se aprueben, junto con contratos de entrada/salida y errores. Coordinar migraciones antes de fusionar y priorizar pruebas que protejan los criterios de éxito del módulo asignado.
+Mantener ramas por tarea dentro de los forks, PR internos y revisión cruzada; no abrir PR a la cátedra. Registrar decisiones en ADR breves cuando se aprueben, junto con contratos de entrada/salida y errores. Coordinar migraciones antes de fusionar y priorizar pruebas que protejan los criterios de éxito de los módulos de la plataforma.
 
 Las protecciones actuales son locales a estos clones: `.git/config` limita el destino y `.git/protection-hooks/pre-push` solo autoriza la rama de documentación. Debe planificarse su adaptación a ramas de desarrollo y protección de main en GitHub; no se cambiaron reglas de servidor ni se añadieron colaboradores. El hook puede omitirse deliberadamente con herramientas de Git y no reemplaza los permisos del servidor.

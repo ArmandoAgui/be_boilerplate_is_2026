@@ -1,5 +1,7 @@
 # Análisis inicial: plataforma de condominios
 
+> Actualización de alcance (16/10/2026): el equipo de cinco integrantes planifica los diez módulos y adaptación de autenticación en cuatro semanas. Se conserva el análisis técnico estático; esta corrección no implementa funcionalidades.
+
 Fecha: 16 de octubre de 2026. Equipo: Armando, Heber, Guille, Serrato y Yael. Los nombres completos y los roles definitivos deben confirmarse en reunión.
 
 ## Alcance y evidencia
@@ -8,7 +10,7 @@ Este informe describe el código del backend en `92a451f15d79b851e9285a8abb2c82b
 
 La especificación académica suministrada, **Especificación de módulos y reglas del proyecto**, páginas 1-6, define las reglas generales y el Proyecto 1. El texto de preparación adjunto define esta ejecución: forks, protección de Git y documentación, sin desarrollar funcionalidades. El PDF permite cambios de autenticación u ORM justificados; esta fase conserva ambos por la restricción más específica del encargo.
 
-El PDF distribuye módulos entre diez equipos; el texto adjunto pide analizar la plataforma completa. Se cubren los diez módulos como contexto, sin asumir que este equipo de cinco estudiantes deba implementar todos. Falta confirmar el módulo asignado por la cátedra.
+El equipo confirma que sus cinco integrantes desarrollarán los diez módulos del Proyecto 1, además de integrar/adaptar autenticación, en cuatro semanas. El reparto general de diez equipos del PDF se registra como aclaración con cátedra; no reduce el alcance de esta planificación.
 
 ## Estado comprobado en el código
 
@@ -45,4 +47,4 @@ Los árboles iniciales estaban limpios. Se preservan los SHA de main indicados a
 3. [Riesgos](06-riesgos-y-recomendaciones.md) y [propuesta preliminar de plataforma](07-propuesta-plataforma-condominios.md).
 4. En el fork frontend, `docs/01-analisis-frontend.md` a `docs/04-integracion-backend.md`.
 
-La primera reunión debe fijar el alcance asignado, contratos de roles y pertenencia, estrategia de sesión, responsables de entidades compartidas y migraciones, puertos y despliegue. Se recomienda reutilizar la estructura modular, los repositorios, DTOs, normalización de email y autenticación existentes, agregando las decisiones faltantes en cambios posteriores revisados por el equipo. No se eligió una nueva librería de estado, ORM ni arquitectura distribuida.
+La primera reunión debe fijar el alcance completo, contratos de roles y pertenencia, estrategia de sesión, responsables de entidades compartidas y migraciones, puertos y despliegue. Se recomienda reutilizar la estructura modular, los repositorios, DTOs, normalización de email y autenticación existentes, agregando las decisiones faltantes en cambios posteriores revisados por el equipo. No se eligió una nueva librería de estado, ORM ni arquitectura distribuida.
