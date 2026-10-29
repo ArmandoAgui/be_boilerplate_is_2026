@@ -19,7 +19,8 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     residente: string,
     vecino: string,
     ajeno: string,
-    seguridad: string;
+    seguridad: string,
+    sinUnidad: string;
   let unidadId: string,
     otraUnidadId: string,
     areaId: string,
@@ -39,9 +40,8 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     .slice(0, 10);
   const inicio = `${manana}T12:00:00-06:00`;
   const http = () => request(app.getHttpServer());
-  const body = (area = areaId, unidad = unidadId) => ({
+  const body = (area = areaId) => ({
     areaId: area,
-    unidadId: unidad,
     inicio,
     duracionHoras: 1,
     asistentes: 2,
@@ -96,6 +96,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     const a = await crearUser('RESIDENTE', 'ajeno');
     ajeno = a.token;
     seguridad = (await crearUser('SEGURIDAD', 'seguridad')).token;
+    sinUnidad = (await crearUser('RESIDENTE', 'sin-unidad')).token;
     const torre = await prisma.torre.create({
       data: { nombre: prefijo.slice(0, 30) },
     });
@@ -163,7 +164,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     }
     await app?.close();
   });
-  it('health y autenticación del boilerplate funcionan', async () => {
+  it('health, login y roles del boilerplate', async () => {
     await http().get('/api/v1').expect(200);
     const u = await prisma.user.findUniqueOrThrow({ where: { id: users[1] } });
     const r = await http()
@@ -173,8 +174,6 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     expect(r.body.accessToken).toBeTypeOf('string');
     expect(r.body.user.rol).toBe('RESIDENTE');
     expect(r.body.user.passwordHash).toBeUndefined();
-  });
-  it('401 sin sesión, 403 para seguridad y sin escalamiento al registrar', async () => {
     await http().get('/api/v1/areas').expect(401);
     await http()
       .get('/api/v1/areas')
@@ -193,8 +192,13 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
         rol: 'ADMINISTRADOR',
       })
       .expect(400);
+    await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', admin)
+      .send(body())
+      .expect(403);
   });
-  it('consulta áreas y unidades vinculadas', async () => {
+  it('consulta áreas y conserva el contrato compartido de unidades', async () => {
     const r = await http()
       .get('/api/v1/areas')
       .set('Authorization', residente)
@@ -208,39 +212,47 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .expect(200);
     expect(u.body.datos).toEqual([{ id: unidadId, codigo: `${prefijo}-1` }]);
   });
-  it('crea, persiste UTC y consulta reservas compartidas con paginación', async () => {
+  it('reserva sin unidad, persiste UTC y pagina solo las reservas propias', async () => {
     const r = await http()
       .post('/api/v1/reservas')
-      .set('Authorization', residente)
+      .set('Authorization', sinUnidad)
       .send(body())
       .expect(201);
     expect(r.body.codigo).toMatch(/^RES-\d{6,}$/);
     expect(r.body.inicio).toBe(new Date(inicio).toISOString());
+    expect(r.body.userId).toBe(users[5]);
+    expect(r.body.unidadId).toBeNull();
     const guardada = await prisma.reserva.findUniqueOrThrow({
       where: { id: r.body.id },
     });
     expect(guardada.fin.getTime() - guardada.inicio.getTime()).toBe(3600000);
     const lista = await http()
       .get('/api/v1/reservas/mias?pagina=1&tamanoPagina=1')
-      .set('Authorization', vecino)
+      .set('Authorization', sinUnidad)
       .expect(200);
     expect(lista.body.total).toBe(1);
     expect(lista.body.datos[0].areaNombre).toContain(prefijo);
+    expect(lista.body.datos[0].unidadCodigo).toBeUndefined();
+    expect(
+      (
+        await http()
+          .get('/api/v1/reservas/mias')
+          .set('Authorization', residente)
+          .expect(200)
+      ).body.total,
+    ).toBe(0);
     await http()
       .get('/api/v1/reservas/mias?pagina=0')
       .set('Authorization', residente)
       .expect(400);
   });
-  it('dos solicitudes simultáneas al mismo horario: una 201 y otra 409', async () => {
+  it('dos solicitudes simultáneas de usuarios distintos al mismo horario: 201 y 409', async () => {
     const respuestas = await Promise.all([
       http()
         .post('/api/v1/reservas')
         .set('Authorization', residente)
         .send(body()),
-      http()
-        .post('/api/v1/reservas')
-        .set('Authorization', ajeno)
-        .send(body(areaId, otraUnidadId)),
+      http().post('/api/v1/reservas').set('Authorization', ajeno).send(body()),
     ]);
     expect(respuestas.map((r) => r.status).sort((a, b) => a - b)).toEqual([
       201, 409,
@@ -252,7 +264,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       await prisma.reserva.count({ where: { areaId, estado: 'CONFIRMADA' } }),
     ).toBe(1);
   });
-  it('protege límite por unidad con solicitudes simultáneas a áreas distintas', async () => {
+  it('protege cupo por usuario con solicitudes simultáneas a áreas distintas', async () => {
     await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
@@ -265,17 +277,61 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
         .send(body()),
       http()
         .post('/api/v1/reservas')
-        .set('Authorization', vecino)
+        .set('Authorization', residente)
         .send(body(segundaAreaId)),
     ]);
     expect(respuestas.map((r) => r.status).sort((a, b) => a - b)).toEqual([
       201, 409,
     ]);
     expect(
-      await prisma.reserva.count({ where: { unidadId, estado: 'CONFIRMADA' } }),
+      await prisma.reserva.count({
+        where: { userId: users[1], estado: 'CONFIRMADA' },
+      }),
     ).toBe(2);
   });
-  it('ocupación y cancelación de otro residente de la unidad liberan bloque', async () => {
+  it('compartir unidad no comparte cupo, listado ni permiso para cancelar', async () => {
+    const primera = await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', residente)
+      .send({ ...body(), inicio: `${manana}T08:00:00-06:00` })
+      .expect(201);
+    await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', residente)
+      .send({ ...body(), inicio: `${manana}T10:00:00-06:00` })
+      .expect(201);
+    await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', residente)
+      .send(body())
+      .expect(409);
+    expect(
+      (
+        await http()
+          .get('/api/v1/reservas/mias')
+          .set('Authorization', vecino)
+          .expect(200)
+      ).body.total,
+    ).toBe(0);
+    await http()
+      .patch(`/api/v1/reservas/${primera.body.id}/cancelacion`)
+      .set('Authorization', vecino)
+      .expect(404);
+    await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', vecino)
+      .send(body())
+      .expect(201);
+    expect(
+      (
+        await http()
+          .get('/api/v1/reservas/mias')
+          .set('Authorization', vecino)
+          .expect(200)
+      ).body.total,
+    ).toBe(1);
+  });
+  it('solo su creador cancela, doble cancelación es condicional y libera el bloque', async () => {
     const r = await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
@@ -292,10 +348,14 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .patch(`/api/v1/reservas/${r.body.id}/cancelacion`)
       .set('Authorization', ajeno)
       .expect(404);
+    await http()
+      .patch(`/api/v1/reservas/${r.body.id}/cancelacion`)
+      .set('Authorization', vecino)
+      .expect(404);
     const respuestas = await Promise.all([
       http()
         .patch(`/api/v1/reservas/${r.body.id}/cancelacion`)
-        .set('Authorization', vecino),
+        .set('Authorization', residente),
       http()
         .patch(`/api/v1/reservas/${r.body.id}/cancelacion`)
         .set('Authorization', residente),
@@ -318,7 +378,6 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     const r = await prisma.reserva.create({
       data: {
         areaId,
-        unidadId,
         userId: users[1],
         inicio: proximaHora,
         fin: new Date(proximaHora.getTime() + 3600000),
@@ -330,13 +389,53 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .set('Authorization', residente)
       .expect(409);
   });
-  it('rechaza unidad ajena, capacidad, duración, hora y fechas inválidas', async () => {
-    await http()
-      .post('/api/v1/reservas')
-      .set('Authorization', residente)
-      .send(body(areaId, otraUnidadId))
-      .expect(403);
+  it('conserva reservas históricas y las protege por creador aunque la unidad se desactive', async () => {
+    const r = await prisma.reserva.create({
+      data: {
+        areaId,
+        userId: users[1],
+        unidadId,
+        inicio: new Date(inicio),
+        fin: new Date(new Date(inicio).getTime() + 3600000),
+        asistentes: 1,
+      },
+    });
+    await prisma.unidad.update({
+      where: { id: unidadId },
+      data: { activa: false },
+    });
+    try {
+      expect(
+        (
+          await http()
+            .get('/api/v1/reservas/mias')
+            .set('Authorization', residente)
+            .expect(200)
+        ).body.datos.some((a: { id: string }) => a.id === r.id),
+      ).toBe(true);
+      await http()
+        .patch(`/api/v1/reservas/${r.id}/cancelacion`)
+        .set('Authorization', vecino)
+        .expect(404);
+      await http()
+        .patch(`/api/v1/reservas/${r.id}/cancelacion`)
+        .set('Authorization', residente)
+        .expect(200);
+      expect(
+        (await prisma.reserva.findUniqueOrThrow({ where: { id: r.id } }))
+          .unidadId,
+      ).toBe(unidadId);
+    } finally {
+      await prisma.unidad.update({
+        where: { id: unidadId },
+        data: { activa: true },
+      });
+    }
+  });
+  it('rechaza campos de identidad del cliente, capacidad, duración y fechas inválidas', async () => {
     for (const extra of [
+      { unidadId },
+      { userId: users[2] },
       { asistentes: 41 },
       { asistentes: 0 },
       { duracionHoras: 5 },
@@ -344,20 +443,19 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       { inicio: `${manana}T23:00:00-06:00` },
       { inicio: '2020-01-01T12:00:00Z' },
       { inicio: `${manana}T12:00:00` },
-    ]) {
+    ])
       await http()
         .post('/api/v1/reservas')
         .set('Authorization', residente)
         .send({ ...body(), ...extra })
         .expect(400);
-    }
     for (const fecha of ['2020-01-01', '2099-01-01', '2026-02-30'])
       await http()
         .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${fecha}`)
         .set('Authorization', residente)
         .expect(400);
   });
-  it('mantiene reservas ante edición, desactivación y reemplazo atómico de horarios', async () => {
+  it('conserva reservas ante edición, desactivación y reemplazo de horarios', async () => {
     const r = await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
@@ -399,7 +497,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       ).body.datos.some((a: { id: string }) => a.id === areaId),
     ).toBe(false);
   });
-  it('valida áreas, duplicados y conserva horarios cuando PATCH falla', async () => {
+  it('valida áreas, duplicados y rollback de franjas', async () => {
     const nombre = (
       await prisma.areaComun.findUniqueOrThrow({ where: { id: areaId } })
     ).nombre;
@@ -428,13 +526,12 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       },
       { capacidad: null },
       { activa: null },
-    ]) {
+    ])
       await http()
         .patch(`/api/v1/areas/${areaId}`)
         .set('Authorization', admin)
         .send(extra)
         .expect(400);
-    }
     const r = await http()
       .patch(`/api/v1/areas/${areaId}`)
       .set('Authorization', admin)

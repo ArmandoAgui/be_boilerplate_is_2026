@@ -2,6 +2,9 @@
 
 ## Creados
 
+- `prisma/migrations/20261029160000_reservas_personales/migration.sql`
+- `docs/decisiones/2026-10-29-reservas-personales.md`
+
 - `.github/workflows/reservas.yml`
 - `docs/archivos-modulo-02.md`
 - `docs/modulo-02-reservas.md`

@@ -24,20 +24,16 @@ export class ReservasRepository {
   }
   sesion(tx: Prisma.TransactionClient = this.prisma) {
     return {
-      // Todos los escritores de reservas toman primero unidad, luego área. El bloqueo y las consultas usan tx.
-      bloquearUnidad: (id: string) =>
-        tx.$queryRaw`SELECT id FROM "Unidad" WHERE id = ${id}::uuid FOR UPDATE`,
+      // Reservas personales: primero usuario, luego área. Todas las consultas críticas usan tx.
+      bloquearUsuario: (id: string) =>
+        tx.$queryRaw`SELECT id FROM "users" WHERE id = ${id}::uuid FOR UPDATE`,
       bloquearArea: (id: string) =>
         tx.$queryRaw`SELECT id FROM "AreaComun" WHERE id = ${id}::uuid FOR UPDATE`,
       area: (id: string) =>
         tx.areaComun.findUnique({ where: { id }, include: includeArea }),
-      vinculada: (userId: string, unidadId: string) =>
-        tx.usuarioUnidad.findFirst({
-          where: { userId, unidadId, unidad: { activa: true } },
-        }),
-      futuras: (unidadId: string, ahora: Date) =>
+      futuras: (userId: string, ahora: Date) =>
         tx.reserva.count({
-          where: { unidadId, estado: 'CONFIRMADA', inicio: { gt: ahora } },
+          where: { userId, estado: 'CONFIRMADA', inicio: { gt: ahora } },
         }),
       ocupadas: (areaId: string, inicio: Date, fin: Date) =>
         tx.reserva.findMany({
@@ -54,13 +50,14 @@ export class ReservasRepository {
         tx.reserva.findFirst({
           where: {
             id,
-            unidad: { activa: true, usuarios: { some: { userId } } },
+            userId,
           },
         }),
-      cancelar: (id: string, ahora: Date) =>
+      cancelar: (id: string, userId: string, ahora: Date) =>
         tx.reserva.updateMany({
           where: {
             id,
+            userId,
             estado: 'CONFIRMADA',
             inicio: { gte: new Date(ahora.getTime() + 7_200_000) },
           },
@@ -110,7 +107,7 @@ export class ReservasRepository {
   }
   async mias(userId: string, query: ListarReservasDto) {
     const where: Prisma.ReservaWhereInput = {
-      unidad: { activa: true, usuarios: { some: { userId } } },
+      userId,
       estado: query.estado,
     };
     const [filas, total] = await this.prisma.$transaction(
@@ -119,7 +116,6 @@ export class ReservasRepository {
           where,
           include: {
             area: { select: { nombre: true } },
-            unidad: { select: { codigo: true } },
           },
           orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
           skip: (query.pagina - 1) * query.tamanoPagina,
@@ -129,10 +125,9 @@ export class ReservasRepository {
       ],
       { isolationLevel: 'RepeatableRead' },
     );
-    const datos = filas.map(({ area, unidad, ...r }) => ({
+    const datos = filas.map(({ area, ...r }) => ({
       ...r,
       areaNombre: area.nombre,
-      unidadCodigo: unidad.codigo,
     }));
     return {
       datos,

@@ -11,15 +11,13 @@ const horarios = Array.from({ length: 7 }, (_, diaSemana) => ({
 }));
 const data = {
   areaId: 'area',
-  unidadId: 'unidad',
   inicio: '2026-10-30T18:00:00Z',
   duracionHoras: 1,
   asistentes: 2,
 };
 const tx = {
-  bloquearUnidad: vi.fn(),
+  bloquearUsuario: vi.fn(),
   bloquearArea: vi.fn(),
-  vinculada: vi.fn(),
   area: vi.fn(),
   futuras: vi.fn(),
   ocupadas: vi.fn(),
@@ -47,7 +45,6 @@ beforeEach(() => {
     capacidad: 40,
     horarios,
   });
-  tx.vinculada.mockResolvedValue({ id: 'vinculo' });
   tx.futuras.mockResolvedValue(0);
   tx.ocupadas.mockResolvedValue([]);
   tx.cancelar.mockResolvedValue({ count: 1 });
@@ -74,10 +71,10 @@ describe('ReservasService', () => {
     expect(r.bloques[13].estado).toBe('OCUPADO');
     expect(r.bloques[14].estado).toBe('DISPONIBLE');
   });
-  it('crea dentro de transacción y bloquea unidad antes del área', async () => {
+  it('crea dentro de transacción y bloquea usuario antes del área', async () => {
     await service.crear(residente, data);
     expect(repo.transaccion).toHaveBeenCalled();
-    expect(tx.bloquearUnidad.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(tx.bloquearUsuario.mock.invocationCallOrder[0]).toBeLessThan(
       tx.bloquearArea.mock.invocationCallOrder[0],
     );
     expect(tx.crear).toHaveBeenCalledWith(
@@ -87,14 +84,13 @@ describe('ReservasService', () => {
       }),
     );
   });
-  it('rechaza unidad ajena', async () => {
-    tx.vinculada.mockResolvedValue(null);
-    await expect(service.crear(residente, data)).rejects.toMatchObject({
-      status: 403,
-    });
-    expect(tx.crear).not.toHaveBeenCalled();
+  it('reserva sin unidad y atribuye el autor desde la sesión', async () => {
+    await service.crear(residente, data);
+    expect(tx.bloquearUsuario).toHaveBeenCalledWith('user');
+    expect(tx.futuras).toHaveBeenCalledWith('user', expect.any(Date));
+    expect(tx.crear.mock.calls[0][0]).not.toHaveProperty('unidadId');
   });
-  it('rechaza tercera reserva por unidad', async () => {
+  it('rechaza tercera reserva por usuario', async () => {
     tx.futuras.mockResolvedValue(2);
     await expect(service.crear(residente, data)).rejects.toMatchObject({
       status: 409,
@@ -115,13 +111,13 @@ describe('ReservasService', () => {
     });
   });
   it('cancela y guarda marca temporal', async () => {
-    tx.reserva.mockResolvedValue({ unidadId: 'unidad' });
+    tx.reserva.mockResolvedValue({ userId: 'user' });
     const result = await service.cancelar(residente, 'reserva');
     expect(result.estado).toBe('CANCELADA');
     expect(result.canceladaAt.toISOString()).toBe('2026-10-29T18:00:00.000Z');
   });
   it('rechaza cancelación inválida o fuera de plazo', async () => {
-    tx.reserva.mockResolvedValue({ unidadId: 'unidad' });
+    tx.reserva.mockResolvedValue({ userId: 'user' });
     tx.cancelar.mockResolvedValue({ count: 0 });
     await expect(service.cancelar(residente, 'r')).rejects.toMatchObject({
       status: 409,

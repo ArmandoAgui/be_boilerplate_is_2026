@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
@@ -75,11 +74,7 @@ export class ReservasService {
   async crear(user: User, data: CrearReservaDto) {
     permitir(user.rol, 'RESIDENTE');
     return this.repo.transaccion(async (tx) => {
-      await tx.bloquearUnidad(data.unidadId);
-      if (!(await tx.vinculada(user.id, data.unidadId)))
-        throw new ForbiddenException(
-          'La unidad no está vinculada al residente',
-        );
+      await tx.bloquearUsuario(user.id);
       await tx.bloquearArea(data.areaId);
       const area = await tx.area(data.areaId);
       if (!area) throw new NotFoundException('Área inexistente');
@@ -94,10 +89,8 @@ export class ReservasService {
         area.horarios,
         ahora,
       );
-      if ((await tx.futuras(data.unidadId, ahora)) >= 2)
-        throw new ConflictException(
-          'La unidad ya tiene 2 reservas confirmadas futuras',
-        );
+      if ((await tx.futuras(user.id, ahora)) >= 2)
+        throw new ConflictException('Ya tienes 2 reservas confirmadas futuras');
       if (
         (await tx.ocupadas(data.areaId, inicio, fin)).some((r) =>
           hayTraslape(inicio, fin, r.inicio, r.fin),
@@ -108,7 +101,6 @@ export class ReservasService {
         );
       return tx.crear({
         areaId: area.id,
-        unidadId: data.unidadId,
         userId: user.id,
         inicio,
         fin,
@@ -125,9 +117,9 @@ export class ReservasService {
     return this.repo.transaccion(async (tx) => {
       const reserva = await tx.reserva(id, user.id);
       if (!reserva) throw new NotFoundException('Reserva inexistente');
-      await tx.bloquearUnidad(reserva.unidadId);
+      await tx.bloquearUsuario(user.id);
       const ahora = new Date();
-      if ((await tx.cancelar(id, ahora)).count !== 1)
+      if ((await tx.cancelar(id, user.id, ahora)).count !== 1)
         throw new ConflictException(
           'Solo se puede cancelar una reserva confirmada con 2 horas de anticipación',
         );

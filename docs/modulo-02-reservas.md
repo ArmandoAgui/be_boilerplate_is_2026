@@ -1,93 +1,74 @@
-# Módulo 2: reservas de áreas comunes — H5–H8
+# Módulo 2 — Reservas de áreas comunes H5–H8
 
-Responsable: Armando Antonio Aguilar Rosales. Equipo Sonnet 5. Implementación del 29/10/2026.
+Responsable: Armando Antonio Aguilar Rosales. Sonnet 5. Actualizado 29/10/2026.
 
-## Fuentes y compatibilidad
+## Fuentes y decisión vigente
 
-Se revisó el PDF `HISTORIAS_USUARIO_SONNET_5_PROYECTO_1_IS_02_2026 (2).pdf` (28/10/2026), páginas visibles 3–7 y 15–20, y `origin/docs/analisis-inicial` (commit `4c958fe`), incluidos arquitectura, autenticación, integración, modelo conceptual y planificación. El PDF prevalece sobre las propuestas preliminares de la rama de análisis. No se modifica esa documentación.
+Se analizaron el PDF del 28/10/2026 (páginas 3–7,15–20), la rama docs/analisis-inicial (`4c958fe`) y el código real del boilerplate. No se modifica la documentación de análisis.
 
-La auditoría encontró main backend `92a451f`, sin cambios locales ni modelos de dominio. La rama `feat/auth-prisma-docker` tampoco tenía roles/unidades. Se conserva Nest 12, TypeScript 6, Prisma 7, PostgreSQL, JWT global y patrón controller → service → repository → Prisma. No se agregan dependencias backend. Se corrige el lockfile para que pueda instalarse el peer TypeScript 5 de `vite-tsconfig-paths`; el TypeScript de la aplicación sigue siendo 6.
+**Cambio de alcance aprobado por el usuario:** las reservas son personales, el cupo es de dos futuras por usuario y solo su creador las ve y cancela. Esta instrucción sustituye las reglas por unidad del PDF. Véase [D-M2-01](decisiones/2026-10-29-reservas-personales.md), que registra aprobación, compatibilidad y efecto en datos previos.
 
-## Arquitectura y archivos
+## Arquitectura y modelos
 
-- `src/reservas/controllers/reservas.controller.ts`: AreasController, ReservasController y adaptador mínimo UnidadesReservaController; DTOs y parámetros UUID.
-- `src/reservas/services/reservas.service.ts`: casos de uso, rol, pertenencia, transacciones.
-- `src/reservas/services/reservas.rules.ts`: fechas locales, franjas, intervalos semiabiertos `[inicio, fin)`, duración/capacidad.
-- `src/reservas/repositories/reservas.repository.ts`: único acceso del módulo a Prisma; comparte TransactionClient entre bloqueo, lecturas e inserción; paginación consistente.
-- `src/reservas/dto/reservas.dto.ts`: validación estricta y PATCH parcial.
-- `src/reservas/filters/reservas-http.filter.ts`: errores del módulo con message string, incluyendo errores de validación.
-- `src/reservas/reservas.module.ts`: composición; se importa en AppModule.
-- `src/users/dto/user-response.dto.ts`: añade rol/nombre públicos a login y auth/me; nunca hash ni relaciones completas.
+Nest 12 / TypeScript 6 / Prisma 7 / PostgreSQL. JWT global existente, controller → service → repository → Prisma. No se agregan dependencias backend. AppModule importa ReservasModule. UserResponseDto publica rol/nombre sin passwordHash. Se corrigió el lockfile para el peer TypeScript 5 de vite-tsconfig-paths; la app usa TypeScript 6.
 
-## Datos y migraciones
+Archivos de negocio: `controllers/reservas.controller.ts`, `services/reservas.service.ts`, `services/reservas.rules.ts`, `repositories/reservas.repository.ts`, `dto/reservas.dto.ts`, `filters/reservas-http.filter.ts` dentro de src/reservas. El filtro normaliza message a string.
 
-Se reutilizan User/RefreshToken; se añaden a User `rol`, `nombre`, `telefono` y relaciones. Se conserva `email` en vez de renombrar a correo, e `isActive` en vez de activo, para mantener la autenticación existente. La migración conserva usuarios y asigna RESIDENTE por defecto, sin asignar unidades automáticamente ni elevar permisos.
+Se reutilizan User y RefreshToken. Base compartida mínima del PDF: Rol (RESIDENTE/ADMINISTRADOR/SEGURIDAD), nombre/teléfono de User, Torre/Seccion/Unidad/UsuarioUnidad. Se conservan email e isActive del boilerplate. La FK compuesta sección/torre evita cruces. Estas entidades permanecen disponibles para M0/M1; reservas ya no requiere pertenencia a unidad. No hay API pública para asignar roles, editar perfiles o unidades. El nombre provisional del registro sigue pendiente de M0.
 
-Base compartida mínima del PDF: Rol (RESIDENTE, ADMINISTRADOR, SEGURIDAD), Torre, Seccion, Unidad (codigo, torre, sección, cuotaMensual Decimal, activa), UsuarioUnidad (N:M único). La FK compuesta de sección/torre impide unidades de una sección de otra torre. Esta base debe integrarse con los responsables de M0/M1; no hay API para cambiar roles/unidades ni una segunda identidad. El registro del boilerplate sigue sin recoger nombre/teléfono: nombre provisional hasta integrar M0. No se implementan directorio, cuotas o gestión de usuarios fuera de este alcance.
+AreaComun: UUID, nombre único 3–60, capacidad 1–500, activa, auditoría. HorarioArea: día 0–6 y HH:mm, franjas válidas sin solapamientos. Reserva: UUID, código único secuencial RES-000001, areaId, userId creador, inicio/fin UTC, asistentes, CONFIRMADA/CANCELADA, canceladaAt y auditoría. unidadId es nullable e histórico; no se solicita ni se asigna en nuevas reservas.
 
-Modelos propios: AreaComun, HorarioArea y Reserva; UUID, relaciones restrictivas para conservar reservas, estados CONFIRMADA/CANCELADA. Inicio, fin y canceladaAt son timestamptz(3); Prisma devuelve ISO UTC. Índices `(areaId,inicio,fin)` y `(unidadId,estado,inicio)`.
+## Migraciones
 
-Migración nueva: `prisma/migrations/20261029140000_modulo_02_reservas/migration.sql`. Incluye secuencia y función para códigos `RES-000001`, únicos entre áreas y transacciones, ampliables a más de seis dígitos. Los saltos de secuencia tras rollback son normales. Añade CHECKs simples de capacidad, nombre, formato de franjas, duración y coherencia de cancelación. Solapamientos y cupo requieren pasar por el repositorio transaccional; escrituras SQL externas deben respetar el mismo protocolo. No se ejecutó db push, migrate reset ni se alteraron las dos migraciones previas.
+- `20261029140000_modulo_02_reservas`: base compartida, áreas, horarios y reservas, secuencia/función de códigos, índices y CHECKs simples. Conserva las dos migraciones anteriores.
+- `20261029160000_reservas_personales`: DROP NOT NULL de unidadId e índice `(userId,estado,inicio)`. Conserva todos los registros y su autor original.
 
-## Contratos HTTP
+No se usan db push, migrate reset ni borrados de datos ajenos. La secuencia puede tener saltos por rollback. El protocolo transaccional es obligatorio también para futuros escritores de otros módulos; no se afirma que escrituras SQL directas eviten solapamientos automáticamente.
 
-Todas las rutas llevan `/api/v1` y Bearer JWT del boilerplate. `GET auth/me` incluye `id,email,nombre,rol,isActive,createdAt`.
+## API
 
-| Método/ruta | Rol | Entrada | Éxito |
+Prefijo `/api/v1`, Bearer del boilerplate. auth/me incluye id/email/nombre/rol/isActive/createdAt.
+
+| Ruta | Rol | Entrada | Respuesta |
 |---|---|---|---|
-| GET /areas | Residente, Administrador | Sin parámetros | 200 `{datos:[{id,nombre,capacidad,activa,horarios}]}` |
-| GET /areas/:id/disponibilidad | Residente, Administrador | `fecha=AAAA-MM-DD` | 200 `{areaId,fecha,bloques:[{inicio,fin,estado}]}` |
-| POST /areas | Administrador | CrearArea | 201 área con horarios |
-| PATCH /areas/:id | Administrador | Campos opcionales de CrearArea | 200 área con horarios |
-| POST /reservas | Residente | CrearReserva | 201 reserva |
-| GET /reservas/mias | Residente | estado opcional, pagina≥1 (1), tamanoPagina 1–50 (20) | 200 `{datos,total,pagina,tamanoPagina}` |
-| PATCH /reservas/:id/cancelacion | Residente de la unidad | UUID, sin body | 200 `{id,estado:"CANCELADA",canceladaAt}` |
-| GET /unidades/mias | Residente | Sin parámetros | 200 `{datos:[{id,codigo}]}` |
+| GET /areas | Residente, Administrador | — | 200 `{datos:[{id,nombre,capacidad,activa,horarios}]}` |
+| GET /areas/:id/disponibilidad | Residente, Administrador | fecha AAAA-MM-DD | 200 `{areaId,fecha,bloques:[{inicio,fin,estado}]}` |
+| POST /areas | Administrador | nombre, capacidad, activa opcional, horarios | 201 área |
+| PATCH /areas/:id | Administrador | Mismos campos, opcionales | 200 área |
+| POST /reservas | Residente | areaId, inicio ISO con zona, duracionHoras, asistentes | 201 reserva personal |
+| GET /reservas/mias | Residente | estado opcional, pagina≥1 (1), tamanoPagina 1–50 (20) | 200 `{datos,total,pagina,tamanoPagina}` propias |
+| PATCH /reservas/:id/cancelacion | Residente creador | UUID | 200 `{id,estado:"CANCELADA",canceladaAt}` |
+| GET /unidades/mias | Residente | — | Contrato compartido `{datos:[{id,codigo}]}`; no participa en reservas |
 
-Residente recibe solo áreas activas; Administrador recibe también inactivas para H8. Disponibilidad devuelve 404 para un área inactiva incluso al administrador. Cada día devuelve 24 bloques; 23:00–24:00 usa 24:00 como fin visual, sin aceptarlo como hora de franja. Un bloque confirmado sigue marcado Ocupado aunque posteriormente se restrinja el horario. Un bloque pasado sin reserva se marca Fuera de horario.
+El residente recibe solo áreas activas; el administrador también inactivas. Disponibilidad de área inactiva devuelve 404 para ambos. Cada día devuelve 24 bloques, incluidos pasados/fuera de horario; 24:00 se usa solo como fin visual del último bloque. Los datos del listado incluyen área, fechas, asistentes y estado, sin unidadCodigo; unidadId puede aparecer como metadato histórico/null.
 
-CrearArea:
+```json
+{"areaId":"11111111-1111-4111-8111-111111111111","inicio":"2026-10-30T18:00:00.000Z","duracionHoras":2,"asistentes":4}
+```
+
+El servidor añade userId del JWT y código. Cliente no puede indicar userId ni unidadId.
+
 ```json
 {"nombre":"Salón de eventos","capacidad":40,"activa":true,"horarios":[{"diaSemana":1,"horaInicio":"06:00","horaFin":"22:00"}]}
 ```
 
-CrearReserva (sustituir UUIDs y fecha por valores de la base y próximos 30 días):
-```json
-{"areaId":"11111111-1111-4111-8111-111111111111","unidadId":"22222222-2222-4222-8222-222222222222","inicio":"2026-10-30T18:00:00.000Z","duracionHoras":2,"asistentes":4}
-```
-Respuesta de creación (también incluye userId y fechas de auditoría):
-```json
-{"id":"33333333-3333-4333-8333-333333333333","codigo":"RES-000001","areaId":"11111111-1111-4111-8111-111111111111","unidadId":"22222222-2222-4222-8222-222222222222","inicio":"2026-10-30T18:00:00.000Z","fin":"2026-10-30T20:00:00.000Z","asistentes":4,"estado":"CONFIRMADA"}
-```
-
-Listado: cada fila incluye `id,codigo,areaId,unidadId,userId,areaNombre,unidadCodigo,inicio,fin,asistentes,estado,canceladaAt,createdAt,updatedAt`. Orden ascendente por inicio e id; incluye historial cancelado y pasado. Se consultan las unidades activas vinculadas actualmente, no únicamente el usuario que creó la reserva.
-
-Conflicto:
 ```json
 {"statusCode":409,"error":"Conflict","message":"Ese horario ya fue reservado. Elija otro."}
 ```
 
-## Reglas y errores
+## Reglas, errores y concurrencia
 
-- 400: fechas imposibles/pasadas/después de hoy+30, inicio pasado o no en punto, duración fuera de 1–4 enteros, asistentes fuera de 1–capacidad, área inactiva al crear, capacidad fuera de 1–500, nombre fuera de 3–60, franjas vacías/invalidas/traslapadas, UUID o paginación inválidos, propiedades adicionales. ISO requiere Z o desplazamiento explícito.
-- 401: sin JWT válido o usuario inactivo (guard original).
-- 403: rol no autorizado o unidad no vinculada al crear. Administrador no hereda permiso de reservar/cancelar. Seguridad no consulta áreas.
-- 404: área inexistente, disponibilidad de área inactiva o reserva ajena/inexistente al cancelar.
-- 409: mismo horario ocupado, dos reservas confirmadas futuras por unidad, nombre duplicado o transición inválida al cancelar.
+Zona America/El_Salvador UTC−6 sin cambios estacionales; almacenamiento timestamptz(3)/ISO UTC. Hoy y hoy+30 inclusivos. Inicio futuro en punto, duración entera 1–4 horas, asistentes 1–capacidad, cobertura completa en franjas del día. Franjas colindantes forman una ventana continua; separadas no.
 
-El día calendario es America/El_Salvador (UTC−6, sin cambios estacionales). Hoy y hoy+30 son inclusivos. La reserva debe caber completamente en las franjas del día; franjas colindantes cubren una ventana continua, las separadas no. Se permiten minutos en franjas (PDF); solo bloques completos de una hora pueden reservarse.
+La transacción interactiva toma `SELECT users FOR UPDATE` del actor, después `SELECT AreaComun FOR UPDATE`, relee área, valida horario/capacidad/fecha, cuenta futuras por userId, comprueba solapamiento `[inicio,fin)` y crea antes del commit. Mismo TransactionClient para todas las consultas, ReadCommitted predeterminado, maxWait 10s/timeout 15s. Bloqueo de usuario evita una tercera reserva entre áreas distintas; bloqueo del área evita solapamientos entre creadores diferentes. H8 también bloquea el área al editar y reemplaza horarios atómicamente.
 
-## Concurrencia y cancelación
+Cancelar filtra la reserva por creador, bloquea usuario y hace updateMany por id/userId/estado CONFIRMADA/inicio≥ahora+2h. Guarda canceladaAt. Dos cancelaciones simultáneas dan 200/409. A exactamente 2h la API permite cancelar; la UI muestra botón solo si faltan más de 2h según el texto de H7. Canceladas no ocupan ni cuentan. Modificar o desactivar áreas conserva reservas existentes e impide nuevas cuando está inactiva.
 
-Crear reserva abre transacción interactiva con aislamiento ReadCommitted predeterminado y espera/timeout acotados: `SELECT Unidad FOR UPDATE` → validar vínculo vigente/unidad activa → `SELECT AreaComun FOR UPDATE` → releer área, validar horario/capacidad/fecha, contar futuras por unidad, consultar confirmadas que traslapan, insertar antes de commit. Todas las operaciones usan el MISMO TransactionClient. El bloqueo adicional de unidad impide exceder el máximo con solicitudes a áreas diferentes. El bloqueo de área también se usa en H8 para que cambios administrativos se serialicen con nuevas reservas. Intervalos colindantes no se traslapan.
+400: datos/UUID/paginación inválidos, campos extra, fecha/duración/hora/capacidad/franjas inválidas o área inactiva al crear. 401: JWT ausente/inválido o usuario inactivo. 403: rol sin permiso (administrador no hereda reservar/cancelar). 404: área inexistente, disponibilidad inactiva o reserva ajena, aunque se comparta unidad. 409: horario ocupado, límite personal, nombre duplicado, doble cancelación o plazo inválido.
 
-Cancelar permite a cualquier residente de la unidad, según páginas 6 y 18 del PDF. Usa bloqueo de unidad y `updateMany WHERE estado=CONFIRMADA AND inicio >= ahora+2h`. Dos cancelaciones simultáneas producen una 200 y otra 409; guarda canceladaAt. A exactamente 2h la API permite cancelar; el botón de UI exige más de 2h (texto explícito de H7). Canceladas no ocupan bloques ni cuentan para cupo.
+## Ejecución y pruebas
 
-Decisión complementaria del equipo solicitada: desactivar un área bloquea reservas nuevas y conserva todas las confirmadas existentes. Es coherente con H8 (cambios solo para nuevas reservas). Cambiar capacidad/horarios no reescribe ninguna Reserva. PATCH reemplaza franjas atómicamente; un fallo de nombre duplicado revierte también su reemplazo.
-
-## Ejecución local
-
-Usar Node 24 actualizado (se validó 24.22.2) y npm 11; el Node 22.12 instalado inicialmente no satisface todas las herramientas del lock. Se conserva Dockerfile/docker-compose original con PostgreSQL 18. Configure `.env` a partir de `.env.example`, sin versionar secretos.
+Node 24 actualizado / npm 11. Compose/Dockerfile originales con PostgreSQL 18. Configurar .env sin versionar secretos.
 
 ```bash
 npm ci
@@ -97,11 +78,7 @@ npm run build
 npm run start:prod
 ```
 
-Seed idempotente y prohibido en NODE_ENV=production: crea torres A/B, secciones Norte/Sur, ocho unidades/cuotas base, siete cuentas del PDF y cuatro áreas con 06:00–22:00 todos los días. Conserva datos ya existentes. Las cuentas son `admin@condominio.test`, `seguridad@condominio.test` y `residente1` a `residente5@condominio.test`; contraseña exclusivamente de pruebas definida en PDF: `Prueba123!`. No representa credenciales reales.
-
-Frontend requiere `API_URL=http://localhost:3000/api/v1` (o puerto elegido). Ejecutar Next en un puerto diferente. PR complementario: fork `ArmandoAgui/fe_boilerplate_is_2026`, rama `feature/modulo-02-reservas`.
-
-## Pruebas y evidencia
+Seed idempotente, prohibido en producción: ocho unidades, siete usuarios y cuatro áreas 06:00–22:00 toda la semana. Cuentas admin/seguridad/residente1 a residente5 en @condominio.test; contraseña exclusivamente de pruebas del PDF: Prueba123!. Conserva datos existentes. La asignación de unidades no es requisito para reservar.
 
 ```bash
 npm run lint
@@ -111,16 +88,10 @@ npm test
 TEST_DATABASE_URL=postgresql://postgres@localhost:55439/reservas_test npm run test:e2e
 ```
 
-La BD de integración debe terminar en `_test`; aplicar migraciones antes. Sin TEST_DATABASE_URL los tests de integración se omiten explícitamente. No usar datos de compañeros. Las pruebas generan sus propios registros UUID y eliminan solo esos registros al terminar.
+Aplicar las cuatro migraciones antes de integrar. TEST_DATABASE_URL debe terminar en _test; sin variable las pruebas HTTP se omiten. Los fixtures tienen UUID propios y solo eliminan sus datos.
 
-Resultados locales: 40 unitarias aprobadas (incluida health existente) y 12 HTTP/integración aprobadas en PostgreSQL 16 aislado mediante Docker. Dos peticiones Supertest se inician simultáneamente con Promise.all contra el mismo servidor/base: un alta 201 y conflicto 409; también carrera por cupo entre áreas distintas y doble cancelación. Se probaron JWT/login, roles, unidad compartida/ajena, UTC, paginación, liberación de canceladas, validaciones, rollback de franjas y conservación al desactivar. No se confunde mocks unitarios con concurrencia real.
+Resultados locales actuales: **40 unitarias y 13 HTTP/integración aprobadas**. Incluyen creación sin unidad, propiedad personal con unidad compartida, UTC, historial previo, validaciones, permisos, rollback de horarios, desactivación y tres carreras reales en PostgreSQL (solapamiento 201/409, límite personal entre áreas 201/409 y doble cancelación 200/409). Migración incremental y diff sin diferencias comprobados. CI valida una base vacía PostgreSQL 18, las cuatro migraciones, lint/build/typecheck y suites. El PR frontend complementario debe desplegarse junto con este contrato.
 
-Migraciones: deploy de las dos anteriores y la nueva desde una base vacía; status al día; diff esquema real vs Prisma sin diferencias. Build, typecheck y lint aprobados. CI `.github/workflows/reservas.yml` reproduce lint/build/typecheck/unitarias/integración y migraciones con PostgreSQL 18.
+## Límites
 
-## Límites y revisión de integración
-
-- Migraciones compartidas con M0/M1 deben coordinarse antes de fusionar. No existe alta/edición de roles, unidades, perfiles o relaciones en UI: se provee seed mínimo aprobado por PDF.
-- La sesión JWT/refresh del boilerplate se conserva. Los riesgos ya documentados de rotación de refresh concurrente y logout local del frontend pertenecen a M0; no se declara corregida esa parte.
-- npm audit detecta avisos heredados en dependencias backend (incluidos concurrently/shell-quote críticos y Nest/Prisma transitivos altos). No se actualizaron masivamente herramientas/frameworks ajenos al módulo. Revisar antes de despliegue público; no se afirma ausencia de vulnerabilidades en el boilerplate.
-- Se solicitó leer protección de main vía GitHub; la integración devolvió 403 por falta de permiso administrativo. No se cambian protecciones. No hay merges ni cambios directos en main ni escrituras en originales.
-- Por indicación posterior del usuario, no se solicitan revisores automáticamente: el usuario los asignará después.
+Coordinar la excepción aprobada al PDF y los modelos compartidos con el equipo/cátedra. Se conservan los riesgos heredados de refresh/logout de M0 y avisos npm audit de dependencias base (Nest/Prisma y herramientas); no se afirma cobertura exhaustiva ni ausencia de vulnerabilidades. GitHub negó lectura administrativa de protección de main con 403; reglas intactas. Revisores pendientes de asignación manual por instrucción del usuario. Sin merges ni cambios en main/originales.
