@@ -1,0 +1,16 @@
+# Convenciones compartidas Windows / Linux.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Dos espacios al final pueden representar un salto de línea en Markdown.
+[*.md]
+trim_trailing_whitespace = false
+
+# Mantener consistencia con las excepciones del PR de .gitattributes.
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
