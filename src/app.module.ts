@@ -1,4 +1,5 @@
 import { ReservasModule } from './reservas/reservas.module.js';
+import { VisitasModule } from './visitas/visitas.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -25,6 +26,7 @@ import { AsambleasModule } from './asambleas/asambleas.module.js';
     UsersModule,
     AuthModule,
     ReservasModule,
+    VisitasModule,
     ScheduleModule.forRoot(),
     AsambleasModule,
     CuotasModule,
