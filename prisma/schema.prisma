@@ -116,6 +116,32 @@ enum Rol {
   SEGURIDAD
 }
 
+model ParticipacionVoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  temaId    String   @db.Uuid
+  unidadId  String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  unidad Unidad       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([unidadId, temaId])
+  @@index([temaId, createdAt])
+  @@map("participaciones_voto")
+}
+
+model Voto {
+  id       String @id @default(uuid()) @db.Uuid
+  temaId   String @db.Uuid
+  opcionId String @db.Uuid
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  opcion OpcionVoto   @relation(fields: [opcionId, temaId], references: [id, temaId], onDelete: Restrict)
+
+  @@index([temaId, opcionId])
+  @@map("votos")
+}
+
 enum EstadoReserva {
   CONFIRMADA
   CANCELADA
@@ -156,6 +182,7 @@ model Unidad {
   seccion      Seccion         @relation(fields: [seccionId, torreId], references: [id, torreId], onDelete: Restrict)
   usuarios     UsuarioUnidad[]
   reservas     Reserva[]
+  cuotas       Cuota[]
 }
 
 model UsuarioUnidad {
@@ -211,4 +238,26 @@ model Reserva {
   @@index([areaId, inicio, fin])
   @@index([unidadId, estado, inicio])
   @@index([userId, estado, inicio])
+}
+
+enum EstadoCuota {
+  PENDIENTE
+  PAGADA
+}
+
+model Cuota {
+  id               String      @id @default(uuid()) @db.Uuid
+  unidadId         String      @db.Uuid
+  concepto         String      @default("Cuota de mantenimiento") @db.VarChar(60)
+  periodo          String      @db.VarChar(7)
+  monto            Decimal     @db.Decimal(10, 2)
+  fechaVencimiento DateTime    @db.Date
+  estado           EstadoCuota @default(PENDIENTE)
+  fechaPago        DateTime?   @db.Timestamptz(3)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  unidad           Unidad      @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([unidadId, periodo, concepto])
+  @@index([unidadId, estado])
 }
