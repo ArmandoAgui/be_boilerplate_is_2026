@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import type { Rol } from '@PrismaClient';
+import type { EstadoCuota, Prisma, Rol } from '@PrismaClient';
 
 export const CONCEPTO_MANTENIMIENTO = 'Cuota de mantenimiento';
 export const DIA_VENCIMIENTO = '10';
@@ -72,4 +72,49 @@ export function clasificarUnidades<
     }
   }
   return { aGenerar, omitidas };
+}
+
+// ---------- H1: estado de cuenta ----------
+
+/** Estado que ve el residente. VENCIDA no se guarda: se calcula al consultar. */
+export type EstadoVisible = 'PENDIENTE' | 'VENCIDA' | 'PAGADA';
+export const ESTADOS_VISIBLES: EstadoVisible[] = [
+  'PENDIENTE',
+  'VENCIDA',
+  'PAGADA',
+];
+
+/** Medianoche (UTC) del día de hoy en El Salvador, comparable con columnas DATE. */
+export function hoyLocal(ahora: Date): Date {
+  const fecha = new Date(ahora.getTime() - DESFASE_SV_MS)
+    .toISOString()
+    .slice(0, 10);
+  return new Date(`${fecha}T00:00:00Z`);
+}
+
+/** Una cuota PENDIENTE cuyo vencimiento ya pasó se muestra como VENCIDA. */
+export function estadoVisible(
+  estado: EstadoCuota,
+  fechaVencimiento: Date,
+  hoy: Date,
+): EstadoVisible {
+  if (estado === 'PAGADA') return 'PAGADA';
+  return fechaVencimiento < hoy ? 'VENCIDA' : 'PENDIENTE';
+}
+
+/** Traduce el filtro de la pantalla a una condición de la base. */
+export function filtroEstado(
+  estado: EstadoVisible | undefined,
+  hoy: Date,
+): Prisma.CuotaWhereInput {
+  switch (estado) {
+    case 'PAGADA':
+      return { estado: 'PAGADA' };
+    case 'VENCIDA':
+      return { estado: 'PENDIENTE', fechaVencimiento: { lt: hoy } };
+    case 'PENDIENTE':
+      return { estado: 'PENDIENTE', fechaVencimiento: { gte: hoy } };
+    default:
+      return {};
+  }
 }

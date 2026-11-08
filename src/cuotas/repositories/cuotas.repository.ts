@@ -44,4 +44,55 @@ export class CuotasRepository {
   ) {
     return tx.cuota.createMany({ data, skipDuplicates: true });
   }
+
+  // ---------- H1: estado de cuenta ----------
+
+  unidadExiste(unidadId: string) {
+    return this.prisma.unidad.findUnique({
+      where: { id: unidadId },
+      select: { id: true },
+    });
+  }
+
+  async estaVinculado(userId: string, unidadId: string) {
+    const vinculo = await this.prisma.usuarioUnidad.findUnique({
+      where: { userId_unidadId: { userId, unidadId } },
+      select: { id: true },
+    });
+    return vinculo !== null;
+  }
+
+  /**
+   * Página de cuotas, total de filas y saldo pendiente de la unidad.
+   * Las tres consultas van en una transacción para que las cifras coincidan.
+   */
+  async listar(
+    where: Prisma.CuotaWhereInput,
+    unidadId: string,
+    skip: number,
+    take: number,
+  ) {
+    const [filas, total, suma] = await this.prisma.$transaction([
+      this.prisma.cuota.findMany({
+        where,
+        orderBy: [{ fechaVencimiento: 'asc' }, { id: 'asc' }],
+        skip,
+        take,
+      }),
+      this.prisma.cuota.count({ where }),
+      // El total pendiente incluye las vencidas: en la base ambas son PENDIENTE.
+      this.prisma.cuota.aggregate({
+        where: { unidadId, estado: 'PENDIENTE' },
+        _sum: { monto: true },
+      }),
+    ]);
+    return { filas, total, pendiente: suma._sum.monto };
+  }
+
+  /** Busca la cuota solo entre las unidades del usuario: si no es suya, no existe. */
+  cuotaDeUsuario(id: string, userId: string) {
+    return this.prisma.cuota.findFirst({
+      where: { id, unidad: { usuarios: { some: { userId } } } },
+    });
+  }
 }

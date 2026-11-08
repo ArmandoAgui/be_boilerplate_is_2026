@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   clasificarUnidades,
+  estadoVisible,
   fechaVencimiento,
+  filtroEstado,
+  hoyLocal,
   mesLocal,
   mesSiguiente,
   soloRoles,
@@ -66,5 +69,39 @@ describe('H3: reglas de generación de cuotas', () => {
     expect(() => soloRoles('SEGURIDAD', 'ADMINISTRADOR')).toThrow(
       'No tienes permiso',
     );
+  });
+});
+
+describe('H1: estado de cuenta', () => {
+  const hoy = hoyLocal(ahora); // 2026-11-08
+
+  it('toma el día de hoy según El Salvador', () => {
+    expect(hoy.toISOString()).toBe('2026-11-08T00:00:00.000Z');
+    // 9 de noviembre 05:00 UTC todavía es 8 de noviembre en El Salvador.
+    expect(hoyLocal(new Date('2026-11-09T05:00:00Z')).toISOString()).toBe(
+      '2026-11-08T00:00:00.000Z',
+    );
+  });
+
+  it('muestra VENCIDA solo si la cuota pendiente venció antes de hoy', () => {
+    const ayer = new Date('2026-11-07T00:00:00Z');
+    const manana = new Date('2026-11-09T00:00:00Z');
+    expect(estadoVisible('PENDIENTE', ayer, hoy)).toBe('VENCIDA');
+    expect(estadoVisible('PENDIENTE', hoy, hoy)).toBe('PENDIENTE');
+    expect(estadoVisible('PENDIENTE', manana, hoy)).toBe('PENDIENTE');
+    expect(estadoVisible('PAGADA', ayer, hoy)).toBe('PAGADA');
+  });
+
+  it('traduce el filtro de estado a la condición de la base', () => {
+    expect(filtroEstado('VENCIDA', hoy)).toEqual({
+      estado: 'PENDIENTE',
+      fechaVencimiento: { lt: hoy },
+    });
+    expect(filtroEstado('PENDIENTE', hoy)).toEqual({
+      estado: 'PENDIENTE',
+      fechaVencimiento: { gte: hoy },
+    });
+    expect(filtroEstado('PAGADA', hoy)).toEqual({ estado: 'PAGADA' });
+    expect(filtroEstado(undefined, hoy)).toEqual({});
   });
 });

@@ -1,10 +1,19 @@
-import { ConflictException, Injectable } from '@nestjs/common';
-import { Prisma, type User } from '@PrismaClient';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, type Cuota, type User } from '@PrismaClient';
+import type { ListarMisCuotasDto } from '../dto/cuotas.dto.js';
 import { CuotasRepository } from '../repositories/cuotas.repository.js';
 import {
   CONCEPTO_MANTENIMIENTO,
   clasificarUnidades,
+  estadoVisible,
   fechaVencimiento,
+  filtroEstado,
+  hoyLocal,
   soloRoles,
   validarPeriodo,
 } from './cuotas.rules.js';
@@ -70,5 +79,64 @@ export class CuotasService {
       unidades.map((u) => ({ ...u, montoValido: u.cuotaMensual.gt(0) })),
       new Set(existentes.map((c) => c.unidadId)),
     );
+  }
+
+  /** H1: cuotas de una unidad del residente, con su total pendiente. */
+  async misCuotas(user: User, query: ListarMisCuotasDto, ahora = new Date()) {
+    soloRoles(user.rol, 'RESIDENTE');
+    await this.verificarUnidad(user.id, query.unidadId);
+    const hoy = hoyLocal(ahora);
+    const where: Prisma.CuotaWhereInput = {
+      unidadId: query.unidadId,
+      ...(query.periodo ? { periodo: query.periodo } : {}),
+      ...filtroEstado(query.estado, hoy),
+    };
+    const { filas, total, pendiente } = await this.repo.listar(
+      where,
+      query.unidadId,
+      (query.pagina - 1) * query.tamanoPagina,
+      query.tamanoPagina,
+    );
+    return {
+      datos: filas.map((cuota) => this.resumen(cuota, hoy)),
+      totalPendiente: (pendiente ?? new Prisma.Decimal(0)).toFixed(2),
+      total,
+      pagina: query.pagina,
+      tamanoPagina: query.tamanoPagina,
+    };
+  }
+
+  /** H1: detalle de una cuota. Una cuota ajena responde 404, no 403. */
+  async detalle(user: User, id: string, ahora = new Date()) {
+    soloRoles(user.rol, 'RESIDENTE');
+    const cuota = await this.repo.cuotaDeUsuario(id, user.id);
+    if (!cuota) throw new NotFoundException('Cuota inexistente');
+    return {
+      ...this.resumen(cuota, hoyLocal(ahora)),
+      unidadId: cuota.unidadId,
+      fechaPago: cuota.fechaPago?.toISOString() ?? null,
+    };
+  }
+
+  /** 404 si la unidad no existe; 403 si existe pero no es del residente. */
+  private async verificarUnidad(userId: string, unidadId: string) {
+    if (!(await this.repo.unidadExiste(unidadId))) {
+      throw new NotFoundException('Unidad inexistente');
+    }
+    if (!(await this.repo.estaVinculado(userId, unidadId))) {
+      throw new ForbiddenException('No tienes acceso a esta unidad');
+    }
+  }
+
+  private resumen(cuota: Cuota, hoy: Date) {
+    return {
+      id: cuota.id,
+      concepto: cuota.concepto,
+      periodo: cuota.periodo,
+      monto: cuota.monto.toFixed(2),
+      // Fecha de calendario (AAAA-MM-DD), como pide la convención de la API.
+      fechaVencimiento: cuota.fechaVencimiento.toISOString().slice(0, 10),
+      estado: estadoVisible(cuota.estado, cuota.fechaVencimiento, hoy),
+    };
   }
 }
