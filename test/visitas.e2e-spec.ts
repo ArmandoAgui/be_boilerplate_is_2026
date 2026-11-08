@@ -205,9 +205,9 @@ describe.skipIf(!url)('H13 HTTP + PostgreSQL real', () => {
     it.each([
       ['administrador', () => admin],
       ['seguridad', () => seguridad],
-    ])('responde 403 al rol %s', (_rol, token) =>
-      crear(token()).expect(403),
-    );
+    ])('responde 403 al rol %s', async (_rol, token) => {
+      await crear(token()).expect(403);
+    });
 
     it('responde 401 sin sesión', () =>
       http().post(RUTA).send(body()).expect(401));
