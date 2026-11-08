@@ -62,7 +62,7 @@ Zona America/El_Salvador UTC−6 sin cambios estacionales; almacenamiento timest
 
 La transacción interactiva toma `SELECT users FOR UPDATE` del actor, después `SELECT AreaComun FOR UPDATE`, relee área, valida horario/capacidad/fecha, cuenta futuras por userId, comprueba solapamiento `[inicio,fin)` y crea antes del commit. Mismo TransactionClient para todas las consultas, ReadCommitted predeterminado, maxWait 10s/timeout 15s. Bloqueo de usuario evita una tercera reserva entre áreas distintas; bloqueo del área evita solapamientos entre creadores diferentes. H8 también bloquea el área al editar y reemplaza horarios atómicamente.
 
-Cancelar filtra la reserva por creador, bloquea usuario y hace updateMany por id/userId/estado CONFIRMADA/inicio≥ahora+2h. Guarda canceladaAt. Dos cancelaciones simultáneas dan 200/409. A exactamente 2h la API permite cancelar; la UI muestra botón solo si faltan más de 2h según el texto de H7. Canceladas no ocupan ni cuentan. Modificar o desactivar áreas conserva reservas existentes e impide nuevas cuando está inactiva.
+Cancelar filtra la reserva por creador, bloquea usuario y hace updateMany por id/userId/estado CONFIRMADA/inicio≥ahora+24h. Guarda canceladaAt. Dos cancelaciones simultáneas dan 200/409. La cancelación exige al menos 24 horas de anticipación, incluido el instante exacto, tanto en API como en UI (aclaración del instructor del 07/11/2026). Canceladas no ocupan ni cuentan. Modificar o desactivar áreas conserva reservas existentes e impide nuevas cuando está inactiva.
 
 400: datos/UUID/paginación inválidos, campos extra, fecha/duración/hora/capacidad/franjas inválidas o área inactiva al crear. 401: JWT ausente/inválido o usuario inactivo. 403: rol sin permiso (administrador no hereda reservar/cancelar). 404: área inexistente, disponibilidad inactiva o reserva ajena, aunque se comparta unidad. 409: horario ocupado, límite personal, nombre duplicado, doble cancelación o plazo inválido.
 
@@ -90,8 +90,11 @@ TEST_DATABASE_URL=postgresql://postgres@localhost:55439/reservas_test npm run te
 
 Aplicar las cuatro migraciones antes de integrar. TEST_DATABASE_URL debe terminar en _test; sin variable las pruebas HTTP se omiten. Los fixtures tienen UUID propios y solo eliminan sus datos.
 
-Resultados locales actuales: **40 unitarias y 13 HTTP/integración aprobadas**. Incluyen creación sin unidad, propiedad personal con unidad compartida, UTC, historial previo, validaciones, permisos, rollback de horarios, desactivación y tres carreras reales en PostgreSQL (solapamiento 201/409, límite personal entre áreas 201/409 y doble cancelación 200/409). Migración incremental y diff sin diferencias comprobados. CI valida una base vacía PostgreSQL 18, las cuatro migraciones, lint/build/typecheck y suites. El PR frontend complementario debe desplegarse junto con este contrato.
+Resultados locales actuales: **40 unitarias y 14 HTTP/integración aprobadas**. Incluyen creación sin unidad, propiedad personal con unidad compartida, UTC, historial previo, validaciones, permisos, rollback de horarios, desactivación y tres carreras reales en PostgreSQL (solapamiento 201/409, límite personal entre áreas 201/409 y doble cancelación 200/409). Migración incremental y diff sin diferencias comprobados. CI valida una base vacía PostgreSQL 18, las cuatro migraciones, lint/build/typecheck y suites. El PR frontend complementario debe desplegarse junto con este contrato.
 
 ## Límites
 
 Coordinar la excepción aprobada al PDF y los modelos compartidos con el equipo/cátedra. Se conservan los riesgos heredados de refresh/logout de M0 y avisos npm audit de dependencias base (Nest/Prisma y herramientas); no se afirma cobertura exhaustiva ni ausencia de vulnerabilidades. GitHub negó lectura administrativa de protección de main con 403; reglas intactas. Revisores pendientes de asignación manual por instrucción del usuario. Sin merges ni cambios en main/originales.
+
+
+Aclaración del instructor y pendientes de aprobación/deuda: [D-M2-02 — Cancelación 24h](decisiones/2026-11-07-cancelacion-24h.md).

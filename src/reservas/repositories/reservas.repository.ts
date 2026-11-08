@@ -1,6 +1,7 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { Prisma } from '@PrismaClient';
+import { ANTICIPACION_CANCELACION_MS } from '../services/reservas.rules.js';
 import type {
   CrearAreaDto,
   EditarAreaDto,
@@ -59,7 +60,9 @@ export class ReservasRepository {
             id,
             userId,
             estado: 'CONFIRMADA',
-            inicio: { gte: new Date(ahora.getTime() + 7_200_000) },
+            inicio: {
+              gte: new Date(ahora.getTime() + ANTICIPACION_CANCELACION_MS),
+            },
           },
           data: { estado: 'CANCELADA', canceladaAt: ahora },
         }),

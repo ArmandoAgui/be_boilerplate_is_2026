@@ -3,6 +3,7 @@ import type { Rol } from '@PrismaClient';
 import type { HorarioDto } from '../dto/reservas.dto.js';
 
 export const HORA = 3_600_000;
+export const ANTICIPACION_CANCELACION_MS = 24 * HORA;
 export const ZONA = 'America/El_Salvador';
 // El Salvador usa UTC-6 sin cambios estacionales. UTC en persistencia, día local en reglas.
 export function fechaLocal(fecha: Date): string {

@@ -121,7 +121,7 @@ export class ReservasService {
       const ahora = new Date();
       if ((await tx.cancelar(id, user.id, ahora)).count !== 1)
         throw new ConflictException(
-          'Solo se puede cancelar una reserva confirmada con 2 horas de anticipación',
+          'Solo se puede cancelar una reserva confirmada con al menos 24 horas de anticipación',
         );
       return { id, estado: 'CANCELADA', canceladaAt: ahora };
     });

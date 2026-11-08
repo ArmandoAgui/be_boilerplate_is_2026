@@ -14,6 +14,7 @@ if (url && !new URL(url).pathname.endsWith('_test'))
   );
 describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
   let app: INestApplication;
+  let repo: import('../dist/reservas/repositories/reservas.repository.js').ReservasRepository;
   let prisma: import('../dist/prisma/services/prisma.service.js').PrismaService;
   let admin: string,
     residente: string,
@@ -35,10 +36,10 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     horaInicio: '06:00',
     horaFin: '22:00',
   }));
-  const manana = new Date(Date.now() + 24 * 3600000 - 6 * 3600000)
+  const fechaReserva = new Date(Date.now() + 48 * 3600000 - 6 * 3600000)
     .toISOString()
     .slice(0, 10);
-  const inicio = `${manana}T12:00:00-06:00`;
+  const inicio = `${fechaReserva}T12:00:00-06:00`;
   const http = () => request(app.getHttpServer());
   const body = (area = areaId) => ({
     areaId: area,
@@ -68,6 +69,9 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     );
     await app.init();
     prisma = app.get(PrismaService);
+    const { ReservasRepository } =
+      await import('../dist/reservas/repositories/reservas.repository.js');
+    repo = app.get(ReservasRepository);
     const jwt = app.get(JwtService);
     const hash = await bcrypt.hash('Prueba123!', 4);
     const crearUser = async (
@@ -268,7 +272,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
-      .send({ ...body(), inicio: `${manana}T08:00:00-06:00` })
+      .send({ ...body(), inicio: `${fechaReserva}T08:00:00-06:00` })
       .expect(201);
     const respuestas = await Promise.all([
       http()
@@ -293,12 +297,12 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     const primera = await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
-      .send({ ...body(), inicio: `${manana}T08:00:00-06:00` })
+      .send({ ...body(), inicio: `${fechaReserva}T08:00:00-06:00` })
       .expect(201);
     await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
-      .send({ ...body(), inicio: `${manana}T10:00:00-06:00` })
+      .send({ ...body(), inicio: `${fechaReserva}T10:00:00-06:00` })
       .expect(201);
     await http()
       .post('/api/v1/reservas')
@@ -339,7 +343,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .expect(201);
     const disponible = () =>
       http()
-        .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${manana}`)
+        .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${fechaReserva}`)
         .set('Authorization', residente);
     expect((await disponible().expect(200)).body.bloques[12].estado).toBe(
       'OCUPADO',
@@ -371,10 +375,10 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
         .canceladaAt,
     ).not.toBeNull();
   });
-  it('rechaza cancelación fuera de plazo', async () => {
+  it('rechaza cancelación a menos de 24h sin modificar la reserva', async () => {
     const proximaHora = new Date();
     proximaHora.setUTCMinutes(0, 0, 0);
-    proximaHora.setUTCHours(proximaHora.getUTCHours() + 1);
+    proximaHora.setUTCHours(proximaHora.getUTCHours() + 12);
     const r = await prisma.reserva.create({
       data: {
         areaId,
@@ -384,10 +388,45 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
         asistentes: 1,
       },
     });
-    await http()
+    const respuesta = await http()
       .patch(`/api/v1/reservas/${r.id}/cancelacion`)
       .set('Authorization', residente)
       .expect(409);
+    expect(respuesta.body.message).toContain('24 horas');
+    const guardada = await prisma.reserva.findUniqueOrThrow({
+      where: { id: r.id },
+    });
+    expect(guardada.estado).toBe('CONFIRMADA');
+    expect(guardada.canceladaAt).toBeNull();
+  });
+  it('aplica el corte SQL de 24h de forma inclusiva, con precisión de milisegundos', async () => {
+    const ahora = new Date(`${fechaReserva}T12:00:00Z`);
+    const inicio = new Date(ahora.getTime() + 86_400_000);
+    for (const [desfase, esperado] of [
+      [-1, 1],
+      [0, 1],
+      [1, 0],
+    ] as const) {
+      const reserva = await prisma.reserva.create({
+        data: {
+          areaId,
+          userId: users[1],
+          inicio,
+          fin: new Date(inicio.getTime() + 3_600_000),
+          asistentes: 1,
+        },
+      });
+      const reloj = new Date(ahora.getTime() + desfase);
+      const resultado = await prisma.$transaction((tx) =>
+        repo.sesion(tx).cancelar(reserva.id, users[1], reloj),
+      );
+      expect(resultado.count).toBe(esperado);
+      const guardada = await prisma.reserva.findUniqueOrThrow({
+        where: { id: reserva.id },
+      });
+      expect(guardada.estado).toBe(esperado ? 'CANCELADA' : 'CONFIRMADA');
+      expect(guardada.canceladaAt).toEqual(esperado ? reloj : null);
+    }
   });
   it('conserva reservas históricas y las protege por creador aunque la unidad se desactive', async () => {
     const r = await prisma.reserva.create({
@@ -439,10 +478,10 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       { asistentes: 41 },
       { asistentes: 0 },
       { duracionHoras: 5 },
-      { inicio: `${manana}T12:30:00-06:00` },
-      { inicio: `${manana}T23:00:00-06:00` },
+      { inicio: `${fechaReserva}T12:30:00-06:00` },
+      { inicio: `${fechaReserva}T23:00:00-06:00` },
       { inicio: '2020-01-01T12:00:00Z' },
-      { inicio: `${manana}T12:00:00` },
+      { inicio: `${fechaReserva}T12:00:00` },
     ])
       await http()
         .post('/api/v1/reservas')
@@ -480,10 +519,10 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
-      .send({ ...body(), inicio: `${manana}T14:00:00-06:00` })
+      .send({ ...body(), inicio: `${fechaReserva}T14:00:00-06:00` })
       .expect(400);
     await http()
-      .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${manana}`)
+      .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${fechaReserva}`)
       .set('Authorization', residente)
       .expect(404);
     expect(

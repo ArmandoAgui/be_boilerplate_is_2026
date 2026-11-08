@@ -13,7 +13,7 @@ Esta instrucción sustituye, para este módulo, las reglas H6/H7 del PDF que asi
 - GET /reservas/mias consulta solo `userId` del actor. PATCH cancelación filtra id y userId; ajenas devuelven 404, incluso para residentes de la misma unidad.
 - Crear bloquea la fila users del actor y después AreaComun, dentro del mismo TransactionClient. El bloqueo de usuario protege el cupo al reservar áreas distintas; el del área protege solapamientos entre usuarios.
 - El horario elegido se muestra como resumen de lectura en la confirmación. Para modificar área/fecha/inicio se vuelve a disponibilidad. Duración y asistentes siguen editables.
-- Duración, capacidad, zona horaria, 30 días, plazo de cancelación y conservación de reservas ante cambios administrativos no cambian.
+- Duración, capacidad, zona horaria, 30 días y conservación de reservas ante cambios administrativos no cambian. La aclaración posterior del instructor (07/11/2026) fija la cancelación con al menos 24 horas de anticipación.
 
 ## Migración y conservación
 
