@@ -109,6 +109,7 @@ model Unidad {
   usuarios       UsuarioUnidad[]
   reservas       Reserva[]
   autorizaciones AutorizacionVisita[]
+  cuotas         Cuota[]
 }
 
 model UsuarioUnidad {
@@ -194,4 +195,26 @@ model AutorizacionVisita {
   // Seguridad busca en la puerta entre las vigentes dentro de su ventana (H14).
   @@index([estado, fin])
   @@index([visitanteDocumento])
+}
+
+enum EstadoCuota {
+  PENDIENTE
+  PAGADA
+}
+
+model Cuota {
+  id               String      @id @default(uuid()) @db.Uuid
+  unidadId         String      @db.Uuid
+  concepto         String      @default("Cuota de mantenimiento") @db.VarChar(60)
+  periodo          String      @db.VarChar(7)
+  monto            Decimal     @db.Decimal(10, 2)
+  fechaVencimiento DateTime    @db.Date
+  estado           EstadoCuota @default(PENDIENTE)
+  fechaPago        DateTime?   @db.Timestamptz(3)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  unidad           Unidad      @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([unidadId, periodo, concepto])
+  @@index([unidadId, estado])
 }
