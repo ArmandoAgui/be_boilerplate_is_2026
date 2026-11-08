@@ -1,4 +1,5 @@
 import { ReservasModule } from './reservas/reservas.module.js';
+import { CuotasModule } from './cuotas/cuotas.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
@@ -22,6 +23,7 @@ import { validateEnv } from '@Config';
     UsersModule,
     AuthModule,
     ReservasModule,
+    CuotasModule,
   ],
   providers: [
     {
