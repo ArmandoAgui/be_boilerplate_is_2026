@@ -4,7 +4,7 @@ Fecha: 07/11/2026. Cambio solicitado por el usuario mientras un compañero conti
 
 ## Alcance
 
-En los PR hacia main se ejecuta únicamente **Validación temporal (JSON y formato)**: parsear package.json/package-lock.json, comprobar que nombre/versión coincidan y ejecutar git diff --check sobre el cambio del PR. Sin instalación de dependencias ni PostgreSQL. Permisos de solo lectura y timeout de tres minutos.
+En los PR hacia main o develop se ejecuta únicamente **Validación temporal (JSON y formato)**: parsear package.json/package-lock.json, comprobar que nombre/versión coincidan y ejecutar git diff --check sobre el cambio del PR. Sin instalación de dependencias ni PostgreSQL. Permisos de solo lectura y timeout de tres minutos.
 
 No comprueba instalación reproducible, tipos, lint, compilación, funcionalidad ni integración. Su nombre y resumen no representan la aprobación del CI completo. No publica estados falsos ni sustituye aprobaciones de revisores.
 
@@ -32,4 +32,4 @@ Tras desbloquear la cuenta, volver a ejecutar el workflow del último commit. Ha
 
 Yael (`Yael2222`) fue identificado entre los revisores del módulo y sus permisos write se verificaron en ambos forks. El PR de esta entrega solicita su revisión; la aprobación debe emitirla él.
 
-La rama parte del módulo 2 con cancelación de 24h y depende de los PR #1 y #3 de este repositorio. El destino es main del fork; no hay merges automáticos ni cambios directos a main. Integrar la base primero. Revisar el commit propio de este PR para aislar el cambio de CI mientras main no contenga todavía el módulo.
+La rama parte del módulo 2 con cancelación de 24h y depende de los PR #1 y #3 de este repositorio. El destino de integración es develop del fork, por instrucción posterior del usuario; no hay merges automáticos ni cambios directos a main. Integrar la base primero. Revisar el commit propio de este PR para aislar el cambio de CI mientras develop no contenga todavía el módulo.
