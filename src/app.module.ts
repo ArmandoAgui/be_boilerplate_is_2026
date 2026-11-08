@@ -9,6 +9,8 @@ import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { AsambleasModule } from './asambleas/asambleas.module.js';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { validateEnv } from '@Config';
     UsersModule,
     AuthModule,
     ReservasModule,
+    ScheduleModule.forRoot(),
+    AsambleasModule,
     CuotasModule,
   ],
   providers: [
@@ -33,4 +37,4 @@ import { validateEnv } from '@Config';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }
