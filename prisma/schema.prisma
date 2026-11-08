@@ -73,6 +73,32 @@ enum Rol {
   SEGURIDAD
 }
 
+model ParticipacionVoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  temaId    String   @db.Uuid
+  unidadId  String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  unidad Unidad       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([unidadId, temaId])
+  @@index([temaId, createdAt])
+  @@map("participaciones_voto")
+}
+
+model Voto {
+  id       String @id @default(uuid()) @db.Uuid
+  temaId   String @db.Uuid
+  opcionId String @db.Uuid
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  opcion OpcionVoto   @relation(fields: [opcionId, temaId], references: [id, temaId], onDelete: Restrict)
+
+  @@index([temaId, opcionId])
+  @@map("votos")
+}
+
 enum EstadoReserva {
   CONFIRMADA
   CANCELADA
