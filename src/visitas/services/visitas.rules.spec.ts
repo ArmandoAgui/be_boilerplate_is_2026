@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { EstadoAutorizacion } from '@PrismaClient';
 import {
   HORA,
+  admiteIngreso,
   estadoVisible,
   filtroEstado,
+  filtroUtilizables,
   permitir,
   validarVigencia,
 } from './visitas.rules.js';
@@ -101,5 +104,77 @@ describe('Reglas H13', () => {
 
     it('sin filtro no restringe nada', () =>
       expect(filtroEstado(undefined, ahora)).toEqual({}));
+  });
+});
+
+describe('Reglas H14', () => {
+  type Autorizacion = {
+    estado: EstadoAutorizacion;
+    inicio: Date;
+    fin: Date;
+  };
+  const vigente: Autorizacion = {
+    estado: 'VIGENTE',
+    inicio: enHoras(-1),
+    fin: enHoras(5),
+  };
+
+  describe('admiteIngreso', () => {
+    it('admite una vigente dentro de su ventana', () =>
+      expect(admiteIngreso(vigente, ahora)).toBe(true));
+
+    it.each<[string, Partial<Autorizacion>]>([
+      ['el inicio es exactamente ahora', { inicio: ahora }],
+      ['el fin es exactamente ahora', { inicio: enHoras(-5), fin: ahora }],
+    ])('admite cuando %s', (_caso, extra) =>
+      expect(admiteIngreso({ ...vigente, ...extra }, ahora)).toBe(true),
+    );
+
+    it.each<[string, Partial<Autorizacion>]>([
+      ['todavía no empieza', { inicio: enHoras(1), fin: enHoras(6) }],
+      ['ya venció', { inicio: enHoras(-6), fin: enHoras(-1) }],
+      ['está usada', { estado: 'USADA' }],
+      ['está cancelada', { estado: 'CANCELADA' }],
+    ])('rechaza una autorización que %s', (_caso, extra) =>
+      expect(admiteIngreso({ ...vigente, ...extra }, ahora)).toBe(false),
+    );
+  });
+
+  describe('filtroUtilizables', () => {
+    it('exige vigente y la ventana abierta en ambos extremos', () =>
+      expect(filtroUtilizables(ahora)).toEqual({
+        estado: 'VIGENTE',
+        inicio: { lte: ahora },
+        fin: { gte: ahora },
+      }));
+
+    // El buscador y el registro de entrada son dos caminos distintos con el
+    // mismo criterio. Si uno se mueve sin el otro, seguridad vería en la lista
+    // autorizaciones que al registrarlas devuelven 409. Esto los amarra.
+    it('coincide con admiteIngreso en todos los casos de borde', () => {
+      // Se evalúa el where a mano, igual que lo haría Postgres.
+      const where = filtroUtilizables(ahora) as {
+        estado: 'VIGENTE';
+        inicio: { lte: Date };
+        fin: { gte: Date };
+      };
+      const cumpleFiltro = (a: Autorizacion) =>
+        a.estado === where.estado &&
+        a.inicio <= where.inicio.lte &&
+        a.fin >= where.fin.gte;
+
+      const casos: Autorizacion[] = [
+        vigente,
+        { ...vigente, inicio: ahora },
+        { ...vigente, inicio: enHoras(-5), fin: ahora },
+        { ...vigente, inicio: enHoras(1), fin: enHoras(6) },
+        { ...vigente, inicio: enHoras(-6), fin: enHoras(-1) },
+        { ...vigente, estado: 'USADA' },
+        { ...vigente, estado: 'CANCELADA' },
+      ];
+
+      for (const caso of casos)
+        expect(cumpleFiltro(caso)).toBe(admiteIngreso(caso, ahora));
+    });
   });
 });

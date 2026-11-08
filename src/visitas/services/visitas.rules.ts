@@ -63,3 +63,34 @@ export function filtroEstado(
   if (estado) return { estado };
   return {};
 }
+
+/**
+ * H14: seguridad solo deja pasar con una autorización vigente y dentro de su
+ * ventana. Presentarse antes de la hora de inicio cuenta como fuera de
+ * ventana igual que llegar tarde, y las usadas o canceladas no sirven.
+ */
+export function admiteIngreso(
+  autorizacion: { estado: EstadoAutorizacion; inicio: Date; fin: Date },
+  ahora = new Date(),
+): boolean {
+  return (
+    autorizacion.estado === 'VIGENTE' &&
+    autorizacion.inicio <= ahora &&
+    autorizacion.fin >= ahora
+  );
+}
+
+/**
+ * El buscador de la puerta solo muestra lo que se puede usar en este momento,
+ * para que seguridad no intente registrar una entrada que el servidor va a
+ * rechazar. Es el mismo criterio que `admiteIngreso`, en forma de consulta.
+ */
+export function filtroUtilizables(
+  ahora: Date,
+): Prisma.AutorizacionVisitaWhereInput {
+  return {
+    estado: 'VIGENTE',
+    inicio: { lte: ahora },
+    fin: { gte: ahora },
+  };
+}
