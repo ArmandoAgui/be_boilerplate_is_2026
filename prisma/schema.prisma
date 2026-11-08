@@ -38,12 +38,13 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  rol           Rol             @default(RESIDENTE)
-  nombre        String          @default("Residente")
-  telefono      String?
-  unidades      UsuarioUnidad[]
-  reservas      Reserva[]
-  refreshTokens RefreshToken[]
+  rol            Rol                  @default(RESIDENTE)
+  nombre         String               @default("Residente")
+  telefono       String?
+  unidades       UsuarioUnidad[]
+  reservas       Reserva[]
+  autorizaciones AutorizacionVisita[]
+  refreshTokens  RefreshToken[]
 
   @@map("users")
 }
@@ -97,16 +98,17 @@ model Seccion {
 }
 
 model Unidad {
-  id           String          @id @default(uuid()) @db.Uuid
-  codigo       String          @unique
-  torreId      String          @db.Uuid
-  seccionId    String          @db.Uuid
-  cuotaMensual Decimal         @db.Decimal(10, 2)
-  activa       Boolean         @default(true)
-  torre        Torre           @relation(fields: [torreId], references: [id], onDelete: Restrict)
-  seccion      Seccion         @relation(fields: [seccionId, torreId], references: [id, torreId], onDelete: Restrict)
-  usuarios     UsuarioUnidad[]
-  reservas     Reserva[]
+  id             String               @id @default(uuid()) @db.Uuid
+  codigo         String               @unique
+  torreId        String               @db.Uuid
+  seccionId      String               @db.Uuid
+  cuotaMensual   Decimal              @db.Decimal(10, 2)
+  activa         Boolean              @default(true)
+  torre          Torre                @relation(fields: [torreId], references: [id], onDelete: Restrict)
+  seccion        Seccion              @relation(fields: [seccionId, torreId], references: [id, torreId], onDelete: Restrict)
+  usuarios       UsuarioUnidad[]
+  reservas       Reserva[]
+  autorizaciones AutorizacionVisita[]
 }
 
 model UsuarioUnidad {
@@ -162,4 +164,34 @@ model Reserva {
   @@index([areaId, inicio, fin])
   @@index([unidadId, estado, inicio])
   @@index([userId, estado, inicio])
+}
+
+// Módulo 4 — Control de acceso de visitas (H13).
+enum EstadoAutorizacion {
+  VIGENTE
+  USADA
+  CANCELADA
+}
+
+model AutorizacionVisita {
+  id                 String             @id @default(uuid()) @db.Uuid
+  residenteId        String             @db.Uuid
+  unidadId           String             @db.Uuid
+  visitanteNombre    String             @db.VarChar(100)
+  visitanteDocumento String             @db.VarChar(20)
+  inicio             DateTime           @db.Timestamptz(3)
+  fin                DateTime           @db.Timestamptz(3)
+  // Vencida no se almacena: es VIGENTE con fin anterior a ahora. Guardarla
+  // obligaría a una tarea programada que mantuviera la columna al día.
+  estado             EstadoAutorizacion @default(VIGENTE)
+  canceladaAt        DateTime?          @db.Timestamptz(3)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  residente          User               @relation(fields: [residenteId], references: [id], onDelete: Restrict)
+  unidad             Unidad             @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@index([residenteId, estado, inicio])
+  // Seguridad busca en la puerta entre las vigentes dentro de su ventana (H14).
+  @@index([estado, fin])
+  @@index([visitanteDocumento])
 }
