@@ -47,7 +47,7 @@ export class ListarMisCuotasDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  pagina = 1;
+  pagina: number = 1;
 
   @ApiPropertyOptional({ type: Number, default: 20 })
   @IsOptional()
@@ -55,5 +55,31 @@ export class ListarMisCuotasDto {
   @IsInt()
   @Min(1)
   @Max(50)
-  tamanoPagina = 20;
+  tamanoPagina: number = 20;
+}
+
+/** H4: filtros del reporte de morosidad. */
+export class ListarMorosidadDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Sin valor: todas las torres',
+  })
+  @IsOptional()
+  @IsUUID()
+  torreId?: string;
+
+  @ApiPropertyOptional({ type: Number, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pagina: number = 1;
+
+  @ApiPropertyOptional({ type: Number, default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  tamanoPagina: number = 20;
 }

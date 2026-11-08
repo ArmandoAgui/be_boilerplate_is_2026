@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   clasificarUnidades,
+  diasEntre,
   estadoVisible,
   fechaVencimiento,
   filtroEstado,
   hoyLocal,
   mesLocal,
   mesSiguiente,
+  ordenarMorosidad,
   soloRoles,
   validarPeriodo,
 } from './cuotas.rules.js';
@@ -103,5 +105,32 @@ describe('H1: estado de cuenta', () => {
     });
     expect(filtroEstado('PAGADA', hoy)).toEqual({ estado: 'PAGADA' });
     expect(filtroEstado(undefined, hoy)).toEqual({});
+  });
+});
+
+describe('H4: morosidad', () => {
+  const fila = (codigo: string, vencimientoMasAntiguo: string) => ({
+    unidadId: codigo,
+    codigo,
+    torre: 'Torre A',
+    cuotasVencidas: 1,
+    saldoVencido: '50.00',
+    vencimientoMasAntiguo,
+    diasAtraso: 0,
+  });
+
+  it('cuenta los días de atraso desde el vencimiento', () => {
+    const hoy = new Date('2026-11-08T00:00:00Z');
+    expect(diasEntre(new Date('2026-10-10T00:00:00Z'), hoy)).toBe(29);
+    expect(diasEntre(new Date('2026-11-07T00:00:00Z'), hoy)).toBe(1);
+  });
+
+  it('ordena por vencimiento más antiguo y desempata por código', () => {
+    const ordenadas = ordenarMorosidad([
+      fila('B-102', '2026-10-10'),
+      fila('A-201', '2026-10-10'),
+      fila('A-101', '2026-09-10'),
+    ]);
+    expect(ordenadas.map((f) => f.codigo)).toEqual(['A-101', 'A-201', 'B-102']);
   });
 });

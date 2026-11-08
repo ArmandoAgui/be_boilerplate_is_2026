@@ -95,4 +95,38 @@ export class CuotasRepository {
       where: { id, unidad: { usuarios: { some: { userId } } } },
     });
   }
+
+  // ---------- H4: morosidad ----------
+
+  /** Cuotas vencidas agrupadas por unidad: cantidad, saldo y vencimiento más antiguo. */
+  morosidadPorUnidad(vencidas: Prisma.CuotaWhereInput, torreId?: string) {
+    return this.prisma.cuota.groupBy({
+      by: ['unidadId'],
+      where: { ...vencidas, ...(torreId ? { unidad: { torreId } } : {}) },
+      _count: { _all: true },
+      _sum: { monto: true },
+      _min: { fechaVencimiento: true },
+    });
+  }
+
+  unidadesConTorre(ids: string[]) {
+    return this.prisma.unidad.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, codigo: true, torre: { select: { nombre: true } } },
+    });
+  }
+
+  unidadConTorre(id: string) {
+    return this.prisma.unidad.findUnique({
+      where: { id },
+      select: { id: true, codigo: true, torre: { select: { nombre: true } } },
+    });
+  }
+
+  cuotasDeUnidad(unidadId: string, filtro: Prisma.CuotaWhereInput) {
+    return this.prisma.cuota.findMany({
+      where: { unidadId, ...filtro },
+      orderBy: [{ fechaVencimiento: 'asc' }, { id: 'asc' }],
+    });
+  }
 }

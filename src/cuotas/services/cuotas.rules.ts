@@ -118,3 +118,31 @@ export function filtroEstado(
       return {};
   }
 }
+
+// ---------- H4: morosidad ----------
+
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+/** Días completos entre dos fechas de calendario (medianoche UTC). */
+export function diasEntre(desde: Date, hasta: Date): number {
+  return Math.round((hasta.getTime() - desde.getTime()) / MS_POR_DIA);
+}
+
+export interface FilaMorosidad {
+  unidadId: string;
+  codigo: string;
+  torre: string;
+  cuotasVencidas: number;
+  saldoVencido: string;
+  vencimientoMasAntiguo: string; // AAAA-MM-DD
+  diasAtraso: number;
+}
+
+/** Vencimiento más antiguo primero; en empate, por código de unidad. */
+export function ordenarMorosidad(filas: FilaMorosidad[]): FilaMorosidad[] {
+  return [...filas].sort(
+    (a, b) =>
+      a.vencimientoMasAntiguo.localeCompare(b.vencimientoMasAntiguo) ||
+      a.codigo.localeCompare(b.codigo),
+  );
+}
