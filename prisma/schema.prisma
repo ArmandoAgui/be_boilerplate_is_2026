@@ -45,8 +45,51 @@ model User {
   reservas       Reserva[]
   autorizaciones AutorizacionVisita[]
   refreshTokens  RefreshToken[]
+  asambleasCreadas Asamblea[]
 
   @@map("users")
+}
+
+model TemaVotacion {
+  id                  String    @id @default(uuid()) @db.Uuid
+  asambleaId          String    @db.Uuid
+  titulo              String    @db.VarChar(200)
+
+  apertura            DateTime  @db.Timestamptz(3)
+  cierre              DateTime  @db.Timestamptz(3)
+  notificadoApertura  Boolean   @default(false) @map("notificado_apertura")
+
+  // Se conserva por compatibilidad con el módulo de resultados existente.
+  // H20 y H21 calculan el estado real a partir de las fechas.
+  estado              EstadoTemaVotacion @default(PROGRAMADO)
+
+  asamblea            Asamblea  @relation(fields: [asambleaId], references: [id], onDelete: Cascade)
+  opciones            OpcionVoto[]
+  votos               Voto[]
+  participaciones     ParticipacionVoto[]
+
+  @@index([asambleaId])
+  @@index([apertura, notificadoApertura])
+  @@map("temas_votacion")
+}
+
+model Asamblea {
+  id          String         @id @default(uuid()) @db.Uuid
+  titulo      String         @db.VarChar(150)
+  fechaHora   DateTime       @map("fecha") @db.Timestamptz(3)
+  descripcion String?        @db.VarChar(500)
+  estado      EstadoAsamblea @default(BORRADOR)
+
+  creadaPorId String?        @map("creada_por_id") @db.Uuid
+  creadaPor   User?          @relation(fields: [creadaPorId], references: [id], onDelete: Restrict)
+
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  temas       TemaVotacion[]
+
+  @@index([estado, fechaHora])
+  @@map("asambleas")
 }
 
 model RefreshToken {
@@ -74,11 +117,43 @@ enum Rol {
   SEGURIDAD
 }
 
+model ParticipacionVoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  temaId    String   @db.Uuid
+  unidadId  String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  unidad Unidad       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([unidadId, temaId])
+  @@index([temaId, createdAt])
+  @@map("participaciones_voto")
+}
+
+model Voto {
+  id       String @id @default(uuid()) @db.Uuid
+  temaId   String @db.Uuid
+  opcionId String @db.Uuid
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  opcion OpcionVoto   @relation(fields: [opcionId, temaId], references: [id, temaId], onDelete: Restrict)
+
+  @@index([temaId, opcionId])
+  @@map("votos")
+}
+
 enum EstadoReserva {
   CONFIRMADA
   CANCELADA
 }
-
+enum EstadoAsamblea {
+  BORRADOR
+  PUBLICADA
+  PROGRAMADA
+  EN_CURSO
+  FINALIZADA
+}
 model Torre {
   id        String    @id @default(uuid()) @db.Uuid
   nombre    String    @unique @db.VarChar(30)
