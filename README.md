@@ -533,3 +533,9 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 | `prisma:studio` | Abre Prisma Studio |
 | `db:seed` | Carga el usuario demo |
 | `db:reset` | Resetea la base y vuelve a migrar |
+
+## Módulo 2 — Reservas H5–H8 (Sonnet 5)
+
+Implementado por Armando Antonio Aguilar Rosales. Arquitectura, contratos, migración,
+seed, permisos, concurrencia y ejecución: [docs/modulo-02-reservas.md](docs/modulo-02-reservas.md).
+Pruebas: `npm test` y `TEST_DATABASE_URL=... npm run test:e2e` sobre una BD aislada migrada.

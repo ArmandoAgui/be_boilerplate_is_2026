@@ -38,6 +38,11 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  rol           Rol             @default(RESIDENTE)
+  nombre        String          @default("Residente")
+  telefono      String?
+  unidades      UsuarioUnidad[]
+  reservas      Reserva[]
   refreshTokens RefreshToken[]
 
   @@map("users")
@@ -59,4 +64,102 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// Base compartida mínima del PDF, un solo condominio. Sin administración pública de roles.
+enum Rol {
+  RESIDENTE
+  ADMINISTRADOR
+  SEGURIDAD
+}
+
+enum EstadoReserva {
+  CONFIRMADA
+  CANCELADA
+}
+
+model Torre {
+  id        String    @id @default(uuid()) @db.Uuid
+  nombre    String    @unique @db.VarChar(30)
+  secciones Seccion[]
+  unidades  Unidad[]
+}
+
+model Seccion {
+  id       String   @id @default(uuid()) @db.Uuid
+  nombre   String   @db.VarChar(30)
+  torreId  String   @db.Uuid
+  torre    Torre    @relation(fields: [torreId], references: [id], onDelete: Restrict)
+  unidades Unidad[]
+
+  @@unique([torreId, nombre])
+  @@unique([id, torreId])
+}
+
+model Unidad {
+  id           String          @id @default(uuid()) @db.Uuid
+  codigo       String          @unique
+  torreId      String          @db.Uuid
+  seccionId    String          @db.Uuid
+  cuotaMensual Decimal         @db.Decimal(10, 2)
+  activa       Boolean         @default(true)
+  torre        Torre           @relation(fields: [torreId], references: [id], onDelete: Restrict)
+  seccion      Seccion         @relation(fields: [seccionId, torreId], references: [id, torreId], onDelete: Restrict)
+  usuarios     UsuarioUnidad[]
+  reservas     Reserva[]
+}
+
+model UsuarioUnidad {
+  id       String @id @default(uuid()) @db.Uuid
+  userId   String @db.Uuid
+  unidadId String @db.Uuid
+  user     User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  unidad   Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, unidadId])
+  @@index([unidadId])
+}
+
+model AreaComun {
+  id        String        @id @default(uuid()) @db.Uuid
+  nombre    String        @unique @db.VarChar(60)
+  capacidad Int
+  activa    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  horarios  HorarioArea[]
+  reservas  Reserva[]
+}
+
+model HorarioArea {
+  id         String    @id @default(uuid()) @db.Uuid
+  areaId     String    @db.Uuid
+  diaSemana  Int
+  horaInicio String    @db.VarChar(5)
+  horaFin    String    @db.VarChar(5)
+  area       AreaComun @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@index([areaId, diaSemana])
+}
+
+model Reserva {
+  id          String        @id @default(uuid()) @db.Uuid
+  codigo      String        @unique @default(dbgenerated("reserva_codigo()"))
+  areaId      String        @db.Uuid
+  unidadId    String?       @db.Uuid
+  userId      String        @db.Uuid
+  inicio      DateTime      @db.Timestamptz(3)
+  fin         DateTime      @db.Timestamptz(3)
+  asistentes  Int
+  estado      EstadoReserva @default(CONFIRMADA)
+  canceladaAt DateTime?     @db.Timestamptz(3)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  area        AreaComun     @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  unidad      Unidad?       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([areaId, inicio, fin])
+  @@index([unidadId, estado, inicio])
+  @@index([userId, estado, inicio])
 }
