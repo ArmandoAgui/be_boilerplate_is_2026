@@ -609,6 +609,22 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
   });
 
   describe('GET presentes', () => {
+    /** Inserta un movimiento ya dentro, para fijar su hora y su unidad. */
+    const sembrarPresente = (extra: Record<string, unknown> = {}) =>
+      prisma.movimientoVisita.create({
+        data: {
+          unidadId,
+          visitanteNombre: 'Marta Reyes',
+          visitanteDocumento: '098765432',
+          condicion: 'SIN_AUTORIZACION',
+          ingresoPorId: seguridadId,
+          ...extra,
+        },
+      });
+
+    const listar = (query = '') =>
+      http().get(`${RUTA_PRESENTES}${query}`).set('Authorization', seguridad);
+
     it('lista a quien entró y no ha salido, y deja de listarlo al salir', async () => {
       const a = await sembrarAutorizacion();
       const entrada = await entrar({ autorizacionId: a.id }).expect(201);
@@ -641,6 +657,70 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
 
     it('responde 403 al residente', () =>
       http().get(RUTA_PRESENTES).set('Authorization', residente).expect(403));
+
+    it('filtra por nombre parcial sin distinguir mayúsculas', async () => {
+      await sembrarPresente();
+      await sembrarPresente({ visitanteNombre: 'Carlos Mejia' });
+      const r = await listar('?buscar=MARTA').expect(200);
+      expect(r.body.total).toBe(1);
+      expect(r.body.datos[0].visitanteNombre).toBe('Marta Reyes');
+    });
+
+    it('filtra por documento', async () => {
+      await sembrarPresente();
+      await sembrarPresente({
+        visitanteNombre: 'Carlos Mejia',
+        visitanteDocumento: '011223344',
+      });
+      const r = await listar('?buscar=011223').expect(200);
+      expect(r.body.total).toBe(1);
+      expect(r.body.datos[0].visitanteNombre).toBe('Carlos Mejia');
+    });
+
+    it('filtra por unidad de destino', async () => {
+      await sembrarPresente();
+      await sembrarPresente({
+        unidadId: otraUnidadId,
+        visitanteNombre: 'Carlos Mejia',
+      });
+      const r = await listar(`?unidadId=${otraUnidadId}`).expect(200);
+      expect(r.body.total).toBe(1);
+      expect(r.body.datos[0].unidadCodigo).toBe(`${prefijo}-2`);
+    });
+
+    it('combina los dos filtros', async () => {
+      await sembrarPresente({ unidadId: otraUnidadId });
+      await sembrarPresente({ visitanteNombre: 'Carlos Mejia' });
+      const r = await listar(`?buscar=marta&unidadId=${otraUnidadId}`).expect(
+        200,
+      );
+      expect(r.body.total).toBe(1);
+      expect(r.body.datos[0].unidadCodigo).toBe(`${prefijo}-2`);
+    });
+
+    // El guardia atiende primero a quien lleva más tiempo adentro.
+    it('ordena por ingreso más antiguo primero', async () => {
+      await sembrarPresente({
+        visitanteNombre: 'Llego despues',
+        ingresoAt: new Date(Date.now() - 1 * HORA),
+      });
+      await sembrarPresente({
+        visitanteNombre: 'Llego primero',
+        ingresoAt: new Date(Date.now() - 5 * HORA),
+      });
+      const r = await listar().expect(200);
+      expect(
+        (r.body.datos as { visitanteNombre: string }[]).map(
+          (d) => d.visitanteNombre,
+        ),
+      ).toEqual(['Llego primero', 'Llego despues']);
+    });
+
+    it('responde 400 con una búsqueda de más de 50 caracteres', () =>
+      listar(`?buscar=${'a'.repeat(51)}`).expect(400));
+
+    it('responde 400 con una unidad que no es uuid', () =>
+      listar('?unidadId=no-es-uuid').expect(400));
   });
 
   describe('GET visitas/unidades', () => {
