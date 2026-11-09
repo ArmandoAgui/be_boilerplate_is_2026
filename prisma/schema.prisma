@@ -41,12 +41,16 @@ model User {
   rol            Rol                  @default(RESIDENTE)
   nombre         String               @default("Residente")
   telefono       String?
-  unidades       UsuarioUnidad[]
-  reservas       Reserva[]
-  autorizaciones AutorizacionVisita[]
-  refreshTokens  RefreshToken[]
-  incidenciasCreadas Incidencia[] @relation("ResidenteIncidencias")
-  incidenciasAsignadas Incidencia[] @relation("ResponsableIncidencias")
+  unidades            UsuarioUnidad[]
+  reservas             Reserva[]
+  autorizaciones       AutorizacionVisita[]
+  // H14: registra quién controló ingreso y salida.
+  ingresosRegistrados  MovimientoVisita[] @relation("IngresosRegistrados")
+  salidasRegistradas   MovimientoVisita[] @relation("SalidasRegistradas")
+  refreshTokens        RefreshToken[]
+  // H9: conserva autor, responsable e historial de incidencias.
+  incidenciasCreadas   Incidencia[]        @relation("ResidenteIncidencias")
+  incidenciasAsignadas Incidencia[]        @relation("ResponsableIncidencias")
   historialIncidencias HistorialIncidencia[] @relation("ActorHistorialIncidencia")
 
   @@map("users")
@@ -112,6 +116,7 @@ model Unidad {
   usuarios       UsuarioUnidad[]
   reservas       Reserva[]
   autorizaciones AutorizacionVisita[]
+  movimientos    MovimientoVisita[]
   cuotas         Cuota[]
   incidencias    Incidencia[]
 }
@@ -195,6 +200,8 @@ model AutorizacionVisita {
   updatedAt          DateTime           @updatedAt
   residente          User               @relation(fields: [residenteId], references: [id], onDelete: Restrict)
   unidad             Unidad             @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  movimiento         MovimientoVisita?
 
   @@index([residenteId, estado, inicio])
   // Seguridad busca en la puerta entre las vigentes dentro de su ventana (H14).
@@ -316,4 +323,34 @@ model HistorialIncidencia {
   @@index([incidenciaId, createdAt(sort: Desc)], map: "historial_incidencia_incidencia_created_at_idx")
   @@index([actorId], map: "historial_incidencia_actor_id_idx")
   @@map("historial_incidencia")
+}
+
+// H14 — Bitácora de accesos. Registra a todo el que entra, con autorización o sin ella.
+enum Condicion {
+  PREAUTORIZADA
+  SIN_AUTORIZACION
+}
+
+model MovimientoVisita {
+  id                 String              @id @default(uuid()) @db.Uuid
+  // Única y opcional: la autorización es de uso único, así que no puede
+  // respaldar dos ingresos, y una visita sin autorización no tiene ninguna.
+  autorizacionId     String?             @unique @db.Uuid
+  unidadId           String              @db.Uuid
+  // Se copian en lugar de leerse de la autorización: la bitácora debe decir a
+  // quién se dejó entrar, aunque después se edite o se borre el origen.
+  visitanteNombre    String              @db.VarChar(100)
+  visitanteDocumento String              @db.VarChar(20)
+  condicion          Condicion
+  ingresoAt          DateTime            @default(now()) @db.Timestamptz(3)
+  // Nulo significa que el visitante sigue dentro. Es la base de H15.
+  salidaAt           DateTime?           @db.Timestamptz(3)
+  ingresoPorId       String              @db.Uuid
+  salidaPorId        String?             @db.Uuid
+  autorizacion       AutorizacionVisita? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
+  unidad             Unidad              @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  ingresoPor         User                @relation("IngresosRegistrados", fields: [ingresoPorId], references: [id], onDelete: Restrict)
+  salidaPor          User?               @relation("SalidasRegistradas", fields: [salidaPorId], references: [id], onDelete: Restrict)
+
+  @@index([salidaAt])
 }
