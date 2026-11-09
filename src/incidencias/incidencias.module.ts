@@ -4,7 +4,9 @@ import { IncidenciasRepository } from './repositories/incidencias.repository.js'
 import { IncidenciaLugarService } from './services/incidencia-lugar.service.js';
 import { IncidenciasService } from './services/incidencias.service.js';
 import { EvidenciasStorage } from './storage/evidencias.storage.js';
+import { AdministradorIncidenciasGuard } from './guards/administrador-incidencias.guard.js';
 import { ResidenteIncidenciasGuard } from './guards/residente-incidencias.guard.js';
+import { ActualizarAsignacionBodyPipe } from './pipes/actualizar-asignacion-body.pipe.js';
 
 @Module({
   controllers: [IncidenciasController],
@@ -13,7 +15,9 @@ import { ResidenteIncidenciasGuard } from './guards/residente-incidencias.guard.
     IncidenciasRepository,
     IncidenciaLugarService,
     EvidenciasStorage,
+    AdministradorIncidenciasGuard,
     ResidenteIncidenciasGuard,
+    ActualizarAsignacionBodyPipe,
   ],
 })
 export class IncidenciasModule {}

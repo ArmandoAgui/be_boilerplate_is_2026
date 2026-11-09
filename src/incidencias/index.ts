@@ -5,6 +5,7 @@ export * from './errors/index.js';
 export * from './filters/index.js';
 export * from './guards/index.js';
 export * from './interceptors/index.js';
+export * from './pipes/index.js';
 export * from './repositories/index.js';
 export * from './services/index.js';
 export * from './storage/index.js';

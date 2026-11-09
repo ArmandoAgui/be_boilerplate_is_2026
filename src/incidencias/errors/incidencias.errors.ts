@@ -9,7 +9,13 @@ export type IncidenciaDomainErrorCode =
   | 'FOTOS_INVALIDAS'
   | 'USUARIO_NO_DISPONIBLE'
   | 'ROL_NO_AUTORIZADO'
-  | 'EVIDENCIA_NO_ENCONTRADA';
+  | 'EVIDENCIA_NO_ENCONTRADA'
+  | 'ADMINISTRADOR_REQUERIDO'
+  | 'RESPONSABLE_NO_VALIDO'
+  | 'INCIDENCIA_NO_ENCONTRADA'
+  | 'INCIDENCIA_RESUELTA'
+  | 'ASIGNACION_VACIA'
+  | 'PRIORIDAD_NO_VALIDA';
 
 export class IncidenciaDomainError extends Error {
   constructor(
@@ -87,6 +93,59 @@ export class IncidenciaEvidenciaNoEncontradaError extends IncidenciaDomainError 
   }
 }
 
+export class AdministradorIncidenciasRequeridoError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'ADMINISTRADOR_REQUERIDO',
+      'Solo un administrador puede gestionar incidencias.',
+    );
+  }
+}
+
+export class ResponsableIncidenciaNoValidoError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'RESPONSABLE_NO_VALIDO',
+      'Elija un responsable válido',
+      'responsableId',
+    );
+  }
+}
+
+export class IncidenciaNoEncontradaError extends IncidenciaDomainError {
+  constructor() {
+    super('INCIDENCIA_NO_ENCONTRADA', 'La incidencia solicitada no existe.');
+  }
+}
+
+export class IncidenciaResueltaError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'INCIDENCIA_RESUELTA',
+      'No se puede modificar la asignación de una incidencia resuelta',
+    );
+  }
+}
+
+export class SolicitudAsignacionVaciaError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'ASIGNACION_VACIA',
+      'Debe indicar al menos una prioridad o un responsable',
+    );
+  }
+}
+
+export class PrioridadIncidenciaNoValidaError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'PRIORIDAD_NO_VALIDA',
+      'prioridad debe ser BAJA, MEDIA, ALTA o URGENTE y no admite null.',
+      'prioridad',
+    );
+  }
+}
+
 const HTTP_ERROR_BY_CODE: Record<
   IncidenciaDomainErrorCode,
   { status: number; error: string }
@@ -100,6 +159,12 @@ const HTTP_ERROR_BY_CODE: Record<
   USUARIO_NO_DISPONIBLE: { status: 401, error: 'Unauthorized' },
   ROL_NO_AUTORIZADO: { status: 403, error: 'Forbidden' },
   EVIDENCIA_NO_ENCONTRADA: { status: 404, error: 'Not Found' },
+  ADMINISTRADOR_REQUERIDO: { status: 403, error: 'Forbidden' },
+  RESPONSABLE_NO_VALIDO: { status: 400, error: 'Bad Request' },
+  INCIDENCIA_NO_ENCONTRADA: { status: 404, error: 'Not Found' },
+  INCIDENCIA_RESUELTA: { status: 409, error: 'Conflict' },
+  ASIGNACION_VACIA: { status: 400, error: 'Bad Request' },
+  PRIORIDAD_NO_VALIDA: { status: 400, error: 'Bad Request' },
 };
 
 /** Traduce solo errores de dominio conocidos; los demás siguen su manejo normal. */
