@@ -1,7 +1,6 @@
 import { ReservasModule } from './reservas/reservas.module.js';
 import { VisitasModule } from './visitas/visitas.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
-import { PaquetesModule } from './paquetes/paquetes.module.js';
 import { UnidadesModule } from './unidades/unidades.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -13,6 +12,8 @@ import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
 import { IncidenciasModule } from '@Incidencias';
+import { PaquetesModule } from './paquetes/paquetes.module.js';
+import { AsambleasModule } from './asambleas/asambleas.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { IncidenciasModule } from '@Incidencias';
     VisitasModule,
     CuotasModule,
     IncidenciasModule,
+    AsambleasModule,
     UnidadesModule,
     PaquetesModule,
   ],
@@ -41,4 +43,4 @@ import { IncidenciasModule } from '@Incidencias';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }
