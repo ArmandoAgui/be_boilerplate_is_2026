@@ -27,6 +27,19 @@ const KNOWN_FIELDS = [
   'areaId',
   'categoria',
   'descripcion',
+  'id',
+  'incidenciaId',
+  'evidenciaId',
+  'estado',
+  'prioridad',
+  'pagina',
+  'tamanoPagina',
+  'responsableId',
+  'actorId',
+  'residenteId',
+  'codigo',
+  'actualizadaAt',
+  'version',
 ];
 
 @Catch()
@@ -164,9 +177,17 @@ export class IncidenciasHttpFilter implements ExceptionFilter {
   ): string | undefined {
     if (message === MENSAJE_DESCRIPCION_INVALIDA) return 'descripcion';
     if (message.startsWith('Para UNIDAD envíe')) return 'lugarTipo';
-    return KNOWN_FIELDS.find((field) =>
-      messages.some((item) => item.toLowerCase().includes(field.toLowerCase())),
-    );
+    const propiedadNoPermitida = messages
+      .map((item) =>
+        /^property ([A-Za-z][A-Za-z0-9_]*) should not exist$/i.exec(item),
+      )
+      .find((match) => match !== null)?.[1];
+    if (propiedadNoPermitida) return propiedadNoPermitida;
+    for (const item of messages) {
+      const property = /^([A-Za-z][A-Za-z0-9_]*)\b/.exec(item)?.[1];
+      if (property && KNOWN_FIELDS.includes(property)) return property;
+    }
+    return undefined;
   }
 
   private errorNameForStatus(statusCode: number): string {
