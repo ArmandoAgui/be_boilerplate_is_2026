@@ -1,12 +1,14 @@
 # Módulo 2 — Reservas de áreas comunes H5–H8
 
-Responsable: Armando Antonio Aguilar Rosales. Sonnet 5. Actualizado 29/10/2026.
+Responsable: Armando Antonio Aguilar Rosales. Sonnet 5. Actualizado 09/11/2026.
 
 ## Fuentes y decisión vigente
 
 Se analizaron el PDF del 28/10/2026 (páginas 3–7,15–20), la rama docs/analisis-inicial (`4c958fe`) y el código real del boilerplate. No se modifica la documentación de análisis.
 
 **Cambio de alcance aprobado por el usuario:** las reservas son personales, el cupo es de dos futuras por usuario y solo su creador las ve y cancela. Esta instrucción sustituye las reglas por unidad del PDF. Véase [D-M2-01](decisiones/2026-10-29-reservas-personales.md), que registra aprobación, compatibilidad y efecto en datos previos.
+
+**Aprobación administrativa (09/11):** las nuevas solicitudes quedan pendientes y no apartan el horario. El administrador confirma tras revalidar condiciones y cupo. Véase [D-M2-03](decisiones/2026-11-09-aprobacion-administrativa.md) para contrato, migración, alcance y validación actuales.
 
 ## Arquitectura y modelos
 
@@ -16,7 +18,7 @@ Archivos de negocio: `controllers/reservas.controller.ts`, `services/reservas.se
 
 Se reutilizan User y RefreshToken. Base compartida mínima del PDF: Rol (RESIDENTE/ADMINISTRADOR/SEGURIDAD), nombre/teléfono de User, Torre/Seccion/Unidad/UsuarioUnidad. Se conservan email e isActive del boilerplate. La FK compuesta sección/torre evita cruces. Estas entidades permanecen disponibles para M0/M1; reservas ya no requiere pertenencia a unidad. No hay API pública para asignar roles, editar perfiles o unidades. El nombre provisional del registro sigue pendiente de M0.
 
-AreaComun: UUID, nombre único 3–60, capacidad 1–500, activa, auditoría. HorarioArea: día 0–6 y HH:mm, franjas válidas sin solapamientos. Reserva: UUID, código único secuencial RES-000001, areaId, userId creador, inicio/fin UTC, asistentes, CONFIRMADA/CANCELADA, canceladaAt y auditoría. unidadId es nullable e histórico; no se solicita ni se asigna en nuevas reservas.
+AreaComun: UUID, nombre único 3–60, capacidad 1–500, activa, auditoría. HorarioArea: día 0–6 y HH:mm, franjas válidas sin solapamientos. Reserva: UUID, código único secuencial RES-000001, areaId, userId creador, inicio/fin UTC, asistentes, PENDIENTE/CONFIRMADA/CANCELADA, canceladaAt y auditoría. unidadId es nullable e histórico; no se solicita ni se asigna en nuevas reservas.
 
 ## Migraciones
 
@@ -24,6 +26,9 @@ AreaComun: UUID, nombre único 3–60, capacidad 1–500, activa, auditoría. Ho
 - `20261029160000_reservas_personales`: DROP NOT NULL de unidadId e índice `(userId,estado,inicio)`. Conserva todos los registros y su autor original.
 
 No se usan db push, migrate reset ni borrados de datos ajenos. La secuencia puede tener saltos por rollback. El protocolo transaccional es obligatorio también para futuros escritores de otros módulos; no se afirma que escrituras SQL directas eviten solapamientos automáticamente.
+
+- `20261109140000_reservas_pendientes`: agrega PENDIENTE al enum.
+- `20261109140100_reservas_aprobacion_default`: cambia el valor inicial y adapta el CHECK de cancelación sin reclasificar reservas existentes.
 
 ## API
 
@@ -35,9 +40,11 @@ Prefijo `/api/v1`, Bearer del boilerplate. auth/me incluye id/email/nombre/rol/i
 | GET /areas/:id/disponibilidad | Residente, Administrador | fecha AAAA-MM-DD | 200 `{areaId,fecha,bloques:[{inicio,fin,estado}]}` |
 | POST /areas | Administrador | nombre, capacidad, activa opcional, horarios | 201 área |
 | PATCH /areas/:id | Administrador | Mismos campos, opcionales | 200 área |
-| POST /reservas | Residente | areaId, inicio ISO con zona, duracionHoras, asistentes | 201 reserva personal |
+| POST /reservas | Residente | areaId, inicio ISO con zona, duracionHoras, asistentes | 201 solicitud personal PENDIENTE |
 | GET /reservas/mias | Residente | estado opcional, pagina≥1 (1), tamanoPagina 1–50 (20) | 200 `{datos,total,pagina,tamanoPagina}` propias |
 | PATCH /reservas/:id/cancelacion | Residente creador | UUID | 200 `{id,estado:"CANCELADA",canceladaAt}` |
+| GET /reservas/pendientes | Administrador | pagina, tamanoPagina | 200 listado paginado de solicitudes futuras, área y nombre del residente |
+| PATCH /reservas/:id/aprobacion | Administrador | UUID | 200 `{id,estado:"CONFIRMADA"}`; 409 si ya no puede aprobarse |
 | GET /unidades/mias | Residente | — | Contrato compartido `{datos:[{id,codigo}]}`; no participa en reservas |
 
 El residente recibe solo áreas activas; el administrador también inactivas. Disponibilidad de área inactiva devuelve 404 para ambos. Cada día devuelve 24 bloques, incluidos pasados/fuera de horario; 24:00 se usa solo como fin visual del último bloque. Los datos del listado incluyen área, fechas, asistentes y estado, sin unidadCodigo; unidadId puede aparecer como metadato histórico/null.
@@ -60,9 +67,11 @@ El servidor añade userId del JWT y código. Cliente no puede indicar userId ni 
 
 Zona America/El_Salvador UTC−6 sin cambios estacionales; almacenamiento timestamptz(3)/ISO UTC. Hoy y hoy+30 inclusivos. Inicio futuro en punto, duración entera 1–4 horas, asistentes 1–capacidad, cobertura completa en franjas del día. Franjas colindantes forman una ventana continua; separadas no.
 
-La transacción interactiva toma `SELECT users FOR UPDATE` del actor, después `SELECT AreaComun FOR UPDATE`, relee área, valida horario/capacidad/fecha, cuenta futuras por userId, comprueba solapamiento `[inicio,fin)` y crea antes del commit. Mismo TransactionClient para todas las consultas, ReadCommitted predeterminado, maxWait 10s/timeout 15s. Bloqueo de usuario evita una tercera reserva entre áreas distintas; bloqueo del área evita solapamientos entre creadores diferentes. H8 también bloquea el área al editar y reemplaza horarios atómicamente.
+La transacción interactiva toma `SELECT users FOR UPDATE` del actor, después `SELECT AreaComun FOR UPDATE`, relee área, valida horario/capacidad/fecha, cuenta futuras por userId, comprueba solapamiento `[inicio,fin)` y crea una solicitud PENDIENTE antes del commit. Las solicitudes pendientes no ocupan ni consumen cupo; disponibilidad, cupo y solapamientos cuentan solo CONFIRMADAS. Mismo TransactionClient para todas las consultas, ReadCommitted predeterminado, maxWait 10s/timeout 15s. Bloqueo de usuario evita una tercera reserva entre áreas distintas; bloqueo del área evita solapamientos entre creadores diferentes. H8 también bloquea el área al editar y reemplaza horarios atómicamente.
 
-Cancelar filtra la reserva por creador, bloquea usuario y hace updateMany por id/userId/estado CONFIRMADA/inicio≥ahora+24h. Guarda canceladaAt. Dos cancelaciones simultáneas dan 200/409. La cancelación exige al menos 24 horas de anticipación, incluido el instante exacto, tanto en API como en UI (aclaración del instructor del 07/11/2026). Canceladas no ocupan ni cuentan. Modificar o desactivar áreas conserva reservas existentes e impide nuevas cuando está inactiva.
+Aprobar bloquea primero al creador y luego el área, relee la solicitud, exige PENDIENTE y residente activo, valida inicio futuro, horarios/capacidad vigentes, cupo y ausencia de confirmadas solapadas. El cambio condicional PENDIENTE → CONFIRMADA ocurre en la misma transacción; intentos simultáneos dan 200/409.
+
+Cancelar filtra la reserva por creador, bloquea usuario y hace updateMany por id/userId/estado PENDIENTE o CONFIRMADA/inicio≥ahora+24h. Guarda canceladaAt. Dos cancelaciones simultáneas dan 200/409. La cancelación exige al menos 24 horas de anticipación, incluido el instante exacto, tanto en API como en UI (aclaración del instructor del 07/11/2026). Canceladas no ocupan ni cuentan. Modificar o desactivar áreas conserva reservas existentes e impide nuevas cuando está inactiva.
 
 400: datos/UUID/paginación inválidos, campos extra, fecha/duración/hora/capacidad/franjas inválidas o área inactiva al crear. 401: JWT ausente/inválido o usuario inactivo. 403: rol sin permiso (administrador no hereda reservar/cancelar). 404: área inexistente, disponibilidad inactiva o reserva ajena, aunque se comparta unidad. 409: horario ocupado, límite personal, nombre duplicado, doble cancelación o plazo inválido.
 
@@ -88,9 +97,9 @@ npm test
 TEST_DATABASE_URL=postgresql://postgres@localhost:55439/reservas_test npm run test:e2e
 ```
 
-Aplicar las cuatro migraciones antes de integrar. TEST_DATABASE_URL debe terminar en _test; sin variable las pruebas HTTP se omiten. Los fixtures tienen UUID propios y solo eliminan sus datos.
+Aplicar todas las migraciones pendientes antes de integrar. TEST_DATABASE_URL debe terminar en _test; sin variable las pruebas HTTP se omiten. Los fixtures tienen UUID propios y solo eliminan sus datos.
 
-Resultados locales actuales: **40 unitarias y 14 HTTP/integración aprobadas**. Incluyen creación sin unidad, propiedad personal con unidad compartida, UTC, historial previo, validaciones, permisos, rollback de horarios, desactivación y tres carreras reales en PostgreSQL (solapamiento 201/409, límite personal entre áreas 201/409 y doble cancelación 200/409). Migración incremental y diff sin diferencias comprobados. CI valida una base vacía PostgreSQL 18, las cuatro migraciones, lint/build/typecheck y suites. El PR frontend complementario debe desplegarse junto con este contrato.
+Resultados históricos de la entrega original: **40 unitarias y 14 HTTP/integración aprobadas**. Incluyen creación sin unidad, propiedad personal con unidad compartida, UTC, historial previo, validaciones, permisos, rollback de horarios, desactivación y tres carreras reales en PostgreSQL (solapamiento 201/409, límite personal entre áreas 201/409 y doble cancelación 200/409). Migración incremental y diff sin diferencias comprobados. CI valida una base vacía PostgreSQL 18, las cuatro migraciones, lint/build/typecheck y suites. El PR frontend complementario debe desplegarse junto con este contrato.
 
 ## Límites
 

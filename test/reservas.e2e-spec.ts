@@ -41,6 +41,10 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     .slice(0, 10);
   const inicio = `${fechaReserva}T12:00:00-06:00`;
   const http = () => request(app.getHttpServer());
+  const aprobar = (id: string) =>
+    http()
+      .patch(`/api/v1/reservas/${id}/aprobacion`)
+      .set('Authorization', admin);
   const body = (area = areaId) => ({
     areaId: area,
     inicio,
@@ -222,6 +226,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .set('Authorization', sinUnidad)
       .send(body())
       .expect(201);
+    expect(r.body.estado).toBe('PENDIENTE');
     expect(r.body.codigo).toMatch(/^RES-\d{6,}$/);
     expect(r.body.inicio).toBe(new Date(inicio).toISOString());
     expect(r.body.userId).toBe(users[5]);
@@ -250,7 +255,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .set('Authorization', residente)
       .expect(400);
   });
-  it('dos solicitudes simultáneas de usuarios distintos al mismo horario: 201 y 409', async () => {
+  it('las pendientes no ocupan: admite solicitudes iguales y solo una aprobación concurrente', async () => {
     const respuestas = await Promise.all([
       http()
         .post('/api/v1/reservas')
@@ -258,34 +263,47 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
         .send(body()),
       http().post('/api/v1/reservas').set('Authorization', ajeno).send(body()),
     ]);
-    expect(respuestas.map((r) => r.status).sort((a, b) => a - b)).toEqual([
-      201, 409,
-    ]);
-    expect(respuestas.find((r) => r.status === 409)?.body.message).toBe(
-      'Ese horario ya fue reservado. Elija otro.',
+    expect(respuestas.map((r) => r.status)).toEqual([201, 201]);
+    const disponibilidad = () =>
+      http()
+        .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${fechaReserva}`)
+        .set('Authorization', residente);
+    expect((await disponibilidad()).body.bloques[12].estado).toBe('DISPONIBLE');
+    const aprobaciones = await Promise.all(
+      respuestas.map((r) => aprobar(r.body.id)),
     );
+    expect(aprobaciones.map((r) => r.status).sort((a, b) => a - b)).toEqual([
+      200, 409,
+    ]);
+    expect((await disponibilidad()).body.bloques[12].estado).toBe('OCUPADO');
     expect(
       await prisma.reserva.count({ where: { areaId, estado: 'CONFIRMADA' } }),
     ).toBe(1);
+    expect(
+      await prisma.reserva.count({ where: { areaId, estado: 'PENDIENTE' } }),
+    ).toBe(1);
   });
-  it('protege cupo por usuario con solicitudes simultáneas a áreas distintas', async () => {
-    await http()
+  it('protege el cupo por residente al aprobar solicitudes de áreas distintas simultáneamente', async () => {
+    const primera = await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
       .send({ ...body(), inicio: `${fechaReserva}T08:00:00-06:00` })
       .expect(201);
-    const respuestas = await Promise.all([
-      http()
-        .post('/api/v1/reservas')
-        .set('Authorization', residente)
-        .send(body()),
-      http()
-        .post('/api/v1/reservas')
-        .set('Authorization', residente)
-        .send(body(segundaAreaId)),
-    ]);
+    await aprobar(primera.body.id).expect(200);
+    const solicitudes = await Promise.all(
+      [areaId, segundaAreaId].map((area) =>
+        http()
+          .post('/api/v1/reservas')
+          .set('Authorization', residente)
+          .send(body(area)),
+      ),
+    );
+    expect(solicitudes.map((r) => r.status)).toEqual([201, 201]);
+    const respuestas = await Promise.all(
+      solicitudes.map((r) => aprobar(r.body.id)),
+    );
     expect(respuestas.map((r) => r.status).sort((a, b) => a - b)).toEqual([
-      201, 409,
+      200, 409,
     ]);
     expect(
       await prisma.reserva.count({
@@ -299,11 +317,13 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .set('Authorization', residente)
       .send({ ...body(), inicio: `${fechaReserva}T08:00:00-06:00` })
       .expect(201);
-    await http()
+    await aprobar(primera.body.id).expect(200);
+    const segunda = await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
       .send({ ...body(), inicio: `${fechaReserva}T10:00:00-06:00` })
       .expect(201);
+    await aprobar(segunda.body.id).expect(200);
     await http()
       .post('/api/v1/reservas')
       .set('Authorization', residente)
@@ -341,6 +361,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .set('Authorization', residente)
       .send(body())
       .expect(201);
+    await aprobar(r.body.id).expect(200);
     const disponible = () =>
       http()
         .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${fechaReserva}`)
@@ -381,6 +402,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     proximaHora.setUTCHours(proximaHora.getUTCHours() + 12);
     const r = await prisma.reserva.create({
       data: {
+        estado: 'CONFIRMADA',
         areaId,
         userId: users[1],
         inicio: proximaHora,
@@ -409,6 +431,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     ] as const) {
       const reserva = await prisma.reserva.create({
         data: {
+          estado: 'CONFIRMADA',
           areaId,
           userId: users[1],
           inicio,
@@ -431,6 +454,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
   it('conserva reservas históricas y las protege por creador aunque la unidad se desactive', async () => {
     const r = await prisma.reserva.create({
       data: {
+        estado: 'CONFIRMADA',
         areaId,
         userId: users[1],
         unidadId,
@@ -500,6 +524,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .set('Authorization', residente)
       .send(body())
       .expect(201);
+    await aprobar(r.body.id).expect(200);
     await http()
       .patch(`/api/v1/areas/${areaId}`)
       .set('Authorization', admin)
@@ -535,6 +560,112 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
         await http().get('/api/v1/areas').set('Authorization', residente)
       ).body.datos.some((a: { id: string }) => a.id === areaId),
     ).toBe(false);
+  });
+  it('solo administrador lista y aprueba; no permite aprobar dos veces ni una cancelada', async () => {
+    const r = await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', residente)
+      .send(body())
+      .expect(201);
+    for (const token of [residente, seguridad]) {
+      await http()
+        .get('/api/v1/reservas/pendientes')
+        .set('Authorization', token)
+        .expect(403);
+      await http()
+        .patch(`/api/v1/reservas/${r.body.id}/aprobacion`)
+        .set('Authorization', token)
+        .expect(403);
+    }
+    await http().patch(`/api/v1/reservas/${r.body.id}/aprobacion`).expect(401);
+    const lista = await http()
+      .get('/api/v1/reservas/pendientes')
+      .set('Authorization', admin)
+      .expect(200);
+    expect(
+      lista.body.datos.some(
+        (x: { id: string; residenteNombre: string }) =>
+          x.id === r.body.id && x.residenteNombre === 'residente',
+      ),
+    ).toBe(true);
+    const respuestas = await Promise.all([
+      aprobar(r.body.id),
+      aprobar(r.body.id),
+    ]);
+    expect(respuestas.map((x) => x.status).sort((a, b) => a - b)).toEqual([
+      200, 409,
+    ]);
+    const otra = await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', vecino)
+      .send(body(segundaAreaId))
+      .expect(201);
+    await http()
+      .patch(`/api/v1/reservas/${otra.body.id}/cancelacion`)
+      .set('Authorization', vecino)
+      .expect(200);
+    await aprobar(otra.body.id).expect(409);
+    await aprobar(randomUUID()).expect(404);
+  });
+  it('revalida al aprobar fecha, capacidad, horarios, área y residente activo', async () => {
+    for (const caso of [
+      'pasada',
+      'capacidad',
+      'horarios',
+      'inactiva',
+      'residente',
+    ] as const) {
+      const r = await http()
+        .post('/api/v1/reservas')
+        .set('Authorization', residente)
+        .send(body())
+        .expect(201);
+      if (caso === 'pasada')
+        await prisma.reserva.update({
+          where: { id: r.body.id },
+          data: {
+            inicio: new Date(new Date(inicio).getTime() - 4 * 86400000),
+            fin: new Date(new Date(inicio).getTime() - 4 * 86400000 + 3600000),
+          },
+        });
+      if (caso === 'capacidad')
+        await prisma.areaComun.update({
+          where: { id: areaId },
+          data: { capacidad: 1 },
+        });
+      if (caso === 'horarios')
+        await prisma.horarioArea.deleteMany({ where: { areaId } });
+      if (caso === 'inactiva')
+        await prisma.areaComun.update({
+          where: { id: areaId },
+          data: { activa: false },
+        });
+      if (caso === 'residente')
+        await prisma.user.update({
+          where: { id: users[1] },
+          data: { isActive: false },
+        });
+      try {
+        await aprobar(r.body.id).expect(409);
+        expect(
+          (await prisma.reserva.findUniqueOrThrow({ where: { id: r.body.id } }))
+            .estado,
+        ).toBe('PENDIENTE');
+      } finally {
+        await prisma.areaComun.update({
+          where: { id: areaId },
+          data: { activa: true, capacidad: 40 },
+        });
+        await prisma.horarioArea.deleteMany({ where: { areaId } });
+        await prisma.horarioArea.createMany({
+          data: horarios.map((h) => ({ ...h, areaId })),
+        });
+        await prisma.user.update({
+          where: { id: users[1] },
+          data: { isActive: true },
+        });
+      }
+    }
   });
   it('valida áreas, duplicados y rollback de franjas', async () => {
     const nombre = (

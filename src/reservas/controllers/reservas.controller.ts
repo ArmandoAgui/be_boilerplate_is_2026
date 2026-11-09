@@ -64,6 +64,18 @@ export class ReservasController {
   ) {
     return this.service.mias(user, query);
   }
+  @Get('pendientes') pendientes(
+    @CurrentUser() user: User,
+    @Query() query: ListarReservasDto,
+  ) {
+    return this.service.pendientes(user, query);
+  }
+  @Patch(':id/aprobacion') aprobar(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.aprobar(user, id);
+  }
   @Patch(':id/cancelacion') cancelar(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
