@@ -100,6 +100,7 @@ export class ReservasService {
           'Ese horario ya fue reservado. Elija otro.',
         );
       return tx.crear({
+        estado: 'PENDIENTE',
         areaId: area.id,
         userId: user.id,
         inicio,
@@ -112,6 +113,53 @@ export class ReservasService {
     permitir(user.rol, 'RESIDENTE');
     return this.repo.mias(user.id, query);
   }
+  pendientes(user: User, query: ListarReservasDto) {
+    permitir(user.rol, 'ADMINISTRADOR');
+    return this.repo.pendientes(query);
+  }
+  async aprobar(user: User, id: string) {
+    permitir(user.rol, 'ADMINISTRADOR');
+    return this.repo.transaccion(async (tx) => {
+      const solicitud = await tx.solicitud(id);
+      if (!solicitud) throw new NotFoundException('Reserva inexistente');
+      // Mismo orden que crear/cancelar: protege cupo entre áreas y traslapes.
+      await tx.bloquearUsuario(solicitud.userId);
+      await tx.bloquearArea(solicitud.areaId);
+      const reserva = await tx.solicitud(id);
+      if (!reserva || reserva.estado !== 'PENDIENTE')
+        throw new ConflictException('La reserva ya no está pendiente');
+      if (!(await tx.residenteActivo(reserva.userId)))
+        throw new ConflictException(
+          'El solicitante ya no es un residente activo',
+        );
+      const area = await tx.area(reserva.areaId);
+      if (!area?.activa)
+        throw new ConflictException('El área está inactiva o ya no existe');
+      const ahora = new Date();
+      // Revalidar condiciones actuales: el horario no quedó apartado al solicitar.
+      if (
+        reserva.inicio <= ahora ||
+        reserva.asistentes > area.capacidad ||
+        !dentroDeHorario(reserva.inicio, reserva.fin, area.horarios)
+      )
+        throw new ConflictException(
+          'La solicitud ya no cumple fecha, capacidad u horario del área',
+        );
+      if ((await tx.futuras(reserva.userId, ahora)) >= 2)
+        throw new ConflictException(
+          'El residente ya tiene 2 reservas confirmadas futuras',
+        );
+      if (
+        (await tx.ocupadas(reserva.areaId, reserva.inicio, reserva.fin)).length
+      )
+        throw new ConflictException(
+          'Ese horario ya fue reservado. Elija otro.',
+        );
+      if ((await tx.aprobar(id)).count !== 1)
+        throw new ConflictException('La reserva ya no está pendiente');
+      return { id, estado: 'CONFIRMADA' };
+    });
+  }
   async cancelar(user: User, id: string) {
     permitir(user.rol, 'RESIDENTE');
     return this.repo.transaccion(async (tx) => {
@@ -121,7 +169,7 @@ export class ReservasService {
       const ahora = new Date();
       if ((await tx.cancelar(id, user.id, ahora)).count !== 1)
         throw new ConflictException(
-          'Solo se puede cancelar una reserva confirmada con al menos 24 horas de anticipación',
+          'Solo se puede cancelar una reserva pendiente o confirmada con al menos 24 horas de anticipación',
         );
       return { id, estado: 'CANCELADA', canceladaAt: ahora };
     });

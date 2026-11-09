@@ -24,6 +24,9 @@ const tx = {
   crear: vi.fn(),
   reserva: vi.fn(),
   cancelar: vi.fn(),
+  solicitud: vi.fn(),
+  residenteActivo: vi.fn(),
+  aprobar: vi.fn(),
   crearArea: vi.fn(),
   editarArea: vi.fn(),
 };
@@ -32,6 +35,7 @@ const repo = {
   areas: vi.fn(),
   unidades: vi.fn(),
   mias: vi.fn(),
+  pendientes: vi.fn(),
   traducirDuplicado: ReservasRepository.prototype.traducirDuplicado,
 };
 let service: ReservasService;

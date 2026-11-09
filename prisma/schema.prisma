@@ -85,6 +85,7 @@ enum Rol {
 }
 
 enum EstadoReserva {
+  PENDIENTE
   CONFIRMADA
   CANCELADA
 }
@@ -168,7 +169,7 @@ model Reserva {
   inicio      DateTime      @db.Timestamptz(3)
   fin         DateTime      @db.Timestamptz(3)
   asistentes  Int
-  estado      EstadoReserva @default(CONFIRMADA)
+  estado      EstadoReserva @default(PENDIENTE)
   canceladaAt DateTime?     @db.Timestamptz(3)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt

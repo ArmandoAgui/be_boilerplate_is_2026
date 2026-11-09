@@ -54,12 +54,20 @@ export class ReservasRepository {
             userId,
           },
         }),
+      solicitud: (id: string) => tx.reserva.findUnique({ where: { id } }),
+      residenteActivo: (id: string) =>
+        tx.user.findFirst({ where: { id, rol: 'RESIDENTE', isActive: true } }),
+      aprobar: (id: string) =>
+        tx.reserva.updateMany({
+          where: { id, estado: 'PENDIENTE' },
+          data: { estado: 'CONFIRMADA' },
+        }),
       cancelar: (id: string, userId: string, ahora: Date) =>
         tx.reserva.updateMany({
           where: {
             id,
             userId,
-            estado: 'CONFIRMADA',
+            estado: { in: ['PENDIENTE', 'CONFIRMADA'] },
             inicio: {
               gte: new Date(ahora.getTime() + ANTICIPACION_CANCELACION_MS),
             },
@@ -134,6 +142,38 @@ export class ReservasRepository {
     }));
     return {
       datos,
+      total,
+      pagina: query.pagina,
+      tamanoPagina: query.tamanoPagina,
+    };
+  }
+  async pendientes(query: ListarReservasDto) {
+    const where: Prisma.ReservaWhereInput = {
+      estado: 'PENDIENTE',
+      inicio: { gt: new Date() },
+    };
+    const [filas, total] = await this.prisma.$transaction(
+      [
+        this.prisma.reserva.findMany({
+          where,
+          include: {
+            area: { select: { nombre: true } },
+            user: { select: { nombre: true } },
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          skip: (query.pagina - 1) * query.tamanoPagina,
+          take: query.tamanoPagina,
+        }),
+        this.prisma.reserva.count({ where }),
+      ],
+      { isolationLevel: 'RepeatableRead' },
+    );
+    return {
+      datos: filas.map(({ area, user, ...reserva }) => ({
+        ...reserva,
+        areaNombre: area.nombre,
+        residenteNombre: user.nombre,
+      })),
       total,
       pagina: query.pagina,
       tamanoPagina: query.tamanoPagina,
