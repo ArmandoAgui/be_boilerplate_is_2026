@@ -13,6 +13,7 @@ coverage
 .DS_Store
 *.tsbuildinfo
 src/generated
+/uploads/
 README.md
 docker-compose.yml
 Dockerfile
