@@ -1,6 +1,8 @@
 import { ReservasModule } from './reservas/reservas.module.js';
 import { VisitasModule } from './visitas/visitas.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
+import { PaquetesModule } from './paquetes/paquetes.module.js';
+import { UnidadesModule } from './unidades/unidades.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
@@ -29,9 +31,10 @@ import { AsambleasModule } from './asambleas/asambleas.module.js';
     ReservasModule,
     VisitasModule,
     CuotasModule,
-    IncidenciasModule,
-    PaquetesModule,
+    IncidenciasModule,    
     AsambleasModule,
+    UnidadesModule,
+    PaquetesModule,
   ],
   providers: [
     {
