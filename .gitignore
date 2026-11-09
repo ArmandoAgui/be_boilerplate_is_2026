@@ -52,6 +52,9 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Evidencias privadas almacenadas en desarrollo local
+/uploads/
+
 # Runtime data
 pids
 *.pid

@@ -16,6 +16,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Prisma en detalle](#prisma-en-detalle)
 - [Autenticación](#autenticación)
 - [Endpoints](#endpoints)
+- [H9: Reportar una incidencia](#h9-reportar-una-incidencia)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -77,6 +78,7 @@ cp .env.example .env
 | `POSTGRES_DB` | `si_be_boilerplate` | Base que se crea al inicializar |
 | `POSTGRES_PORT` | `5432` | Puerto publicado en el host |
 | `DATABASE_URL` | — | **Obligatoria.** Connection string de Prisma |
+| `UPLOADS_DIR` | `./uploads` | Directorio privado para evidencias H9; Docker lo cambia a `/uploads` |
 | `JWT_SECRET` | — | **Obligatoria.** Mínimo 32 caracteres |
 | `JWT_EXPIRES_IN` | `15m` | Vigencia del access token |
 | `REFRESH_TOKEN_EXPIRES_IN_DAYS` | `7` | Vigencia del refresh token |
@@ -209,7 +211,7 @@ npm run prisma:migrate && npm run db:seed
 
 ## Prisma en detalle
 
-El schema vive en [prisma/schema.prisma](prisma/schema.prisma) y define dos modelos: `User` y `RefreshToken`.
+El schema vive en [prisma/schema.prisma](prisma/schema.prisma) y contiene los modelos de autenticación y los módulos implementados, incluidas las incidencias H9.
 
 La configuración del CLI está en [prisma.config.ts](prisma.config.ts) (rutas del schema y las migraciones, comando de seed, y de dónde sale `DATABASE_URL`).
 
@@ -294,6 +296,8 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `POST` | `/auth/refresh` | — | `200` | Renueva el par de tokens |
 | `POST` | `/auth/logout` | — | `204` | Cierra la sesión |
 | `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado |
+| `POST` | `/incidencias` | Bearer (residente) | `201` | Registra una incidencia con hasta tres fotos privadas |
+| `GET` | `/incidencias/:incidenciaId/evidencias/:evidenciaId` | Bearer | `200` | Lee una evidencia si el usuario tiene permiso |
 
 ### Ejemplos
 
@@ -539,3 +543,7 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 Implementado por Armando Antonio Aguilar Rosales. Arquitectura, contratos, migración,
 seed, permisos, concurrencia y ejecución: [docs/modulo-02-reservas.md](docs/modulo-02-reservas.md).
 Pruebas: `npm test` y `TEST_DATABASE_URL=... npm run test:e2e` sobre una BD aislada migrada.
+
+## H9: Reportar una incidencia
+
+El backend permite a un residente activo reportar una incidencia en una unidad vinculada o un área común activa, con hasta tres fotos JPG/PNG privadas. Requiere `Authorization: Bearer <accessToken>`. El contrato, permisos, integración con Next.js, migración, almacenamiento, comandos Git Bash y resultados de validación están en [docs/H9-reportar-incidencia.md](docs/H9-reportar-incidencia.md).
