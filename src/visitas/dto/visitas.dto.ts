@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
+  ValidateIf,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -57,4 +58,49 @@ export class ListarAutorizacionesDto {
   @IsOptional() @IsIn(ESTADOS_AUTORIZACION) estado?: EstadoAutorizacionFiltro;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pagina = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) tamanoPagina = 20;
+}
+
+// ---------------------------------------------------------------------------
+// H14 — Control de accesos
+// ---------------------------------------------------------------------------
+
+export class BuscarAutorizacionesDto {
+  // Mínimo 3 caracteres: en la puerta, buscar con una o dos letras devolvería
+  // media lista y no sirve para identificar a nadie.
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Length(3, 100)
+  buscar!: string;
+}
+
+export class RegistrarEntradaDto {
+  @IsOptional() @IsUUID() autorizacionId?: string;
+
+  // Los tres campos siguientes son la visita sin autorización: seguridad los
+  // teclea en la puerta. Con autorizacionId se toman de la autorización, así
+  // que solo se exigen cuando no viene.
+  @ValidateIf((o: RegistrarEntradaDto) => o.autorizacionId === undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Length(3, 100)
+  visitanteNombre?: string;
+
+  @ValidateIf((o: RegistrarEntradaDto) => o.autorizacionId === undefined)
+  @Matches(/^[A-Za-z0-9]{5,20}$/, {
+    message: 'El documento debe tener de 5 a 20 caracteres alfanuméricos',
+  })
+  visitanteDocumento?: string;
+
+  @ValidateIf((o: RegistrarEntradaDto) => o.autorizacionId === undefined)
+  @IsUUID()
+  unidadId?: string;
+}
+
+export class PresentesDto {
+  @IsOptional() @IsString() @Length(1, 50) buscar?: string;
+  @IsOptional() @IsUUID() unidadId?: string;
 }

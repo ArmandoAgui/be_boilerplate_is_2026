@@ -16,12 +16,12 @@ if (url && !new URL(url).pathname.endsWith('_test'))
 const HORA = 3_600_000;
 const RUTA = '/api/v1/visitas/autorizaciones';
 
-describe.skipIf(!url)('H13 HTTP + PostgreSQL real', () => {
+describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
   let app: INestApplication;
   let prisma: import('../dist/prisma/services/prisma.service.js').PrismaService;
-  let residente: string, vecino: string, ajeno: string;
+  let residente: string, vecino: string;
   let admin: string, seguridad: string;
-  let residenteId: string, ajenoId: string;
+  let residenteId: string, ajenoId: string, seguridadId: string;
   let unidadId: string, otraUnidadId: string;
   let torreId: string, seccionId: string;
   const users: string[] = [];
@@ -88,10 +88,11 @@ describe.skipIf(!url)('H13 HTTP + PostgreSQL real', () => {
     const v = await crearUser('RESIDENTE', 'vecino');
     vecino = v.token;
     const a = await crearUser('RESIDENTE', 'ajeno');
-    ajeno = a.token;
     ajenoId = a.id;
     admin = (await crearUser('ADMINISTRADOR', 'admin')).token;
-    seguridad = (await crearUser('SEGURIDAD', 'seguridad')).token;
+    const s = await crearUser('SEGURIDAD', 'seguridad');
+    seguridad = s.token;
+    seguridadId = s.id;
 
     const torre = await prisma.torre.create({
       data: { nombre: prefijo.slice(0, 30) },
@@ -125,6 +126,11 @@ describe.skipIf(!url)('H13 HTTP + PostgreSQL real', () => {
   }, 30000);
 
   beforeEach(async () => {
+    // MovimientoVisita referencia AutorizacionVisita con RESTRICT, así que la
+    // bitácora se limpia antes que las autorizaciones.
+    await prisma.movimientoVisita.deleteMany({
+      where: { ingresoPorId: { in: users } },
+    });
     await prisma.autorizacionVisita.deleteMany({
       where: { residenteId: { in: users } },
     });
@@ -132,6 +138,9 @@ describe.skipIf(!url)('H13 HTTP + PostgreSQL real', () => {
 
   afterAll(async () => {
     if (prisma) {
+      await prisma.movimientoVisita.deleteMany({
+        where: { ingresoPorId: { in: users } },
+      });
       await prisma.autorizacionVisita.deleteMany({
         where: { residenteId: { in: users } },
       });
@@ -306,7 +315,9 @@ describe.skipIf(!url)('H13 HTTP + PostgreSQL real', () => {
             .set('Authorization', residente),
         ),
       );
-      expect(intentos.map((i) => i.status).sort()).toEqual([200, 409]);
+      expect(intentos.map((i) => i.status).sort((a, b) => a - b)).toEqual([
+        200, 409,
+      ]);
     });
 
     it('responde 404 al cancelar la de otro residente', async () => {
@@ -350,5 +361,308 @@ describe.skipIf(!url)('H13 HTTP + PostgreSQL real', () => {
         .set('Authorization', admin)
         .expect(403);
     });
+  });
+
+  // ==========================================================================
+  // H14 — Control de accesos
+  // ==========================================================================
+
+  const RUTA_BUSCAR = '/api/v1/visitas/autorizaciones';
+  const RUTA_ENTRADAS = '/api/v1/visitas/entradas';
+  const RUTA_PRESENTES = '/api/v1/visitas/presentes';
+
+  /** Inserta directo para poder fabricar estados que la API no deja crear. */
+  const sembrarAutorizacion = (extra: Record<string, unknown> = {}) =>
+    prisma.autorizacionVisita.create({
+      data: {
+        residenteId,
+        unidadId,
+        visitanteNombre: 'Andres Lopez',
+        visitanteDocumento: '045678912',
+        inicio: new Date(Date.now() - 1 * HORA),
+        fin: new Date(Date.now() + 5 * HORA),
+        ...extra,
+      },
+    });
+
+  const entrar = (cuerpo: Record<string, unknown>, token = seguridad) =>
+    http().post(RUTA_ENTRADAS).set('Authorization', token).send(cuerpo);
+
+  describe('GET autorizaciones (buscador de la puerta)', () => {
+    it('encuentra por nombre parcial sin distinguir mayúsculas', async () => {
+      await sembrarAutorizacion();
+      const r = await http()
+        .get(`${RUTA_BUSCAR}?buscar=andres`)
+        .set('Authorization', seguridad)
+        .expect(200);
+      expect(r.body.datos).toHaveLength(1);
+      expect(r.body.datos[0]).toMatchObject({
+        visitanteNombre: 'Andres Lopez',
+        visitanteDocumento: '045678912',
+        unidadCodigo: `${prefijo}-1`,
+      });
+    });
+
+    it('encuentra por documento', async () => {
+      await sembrarAutorizacion();
+      const r = await http()
+        .get(`${RUTA_BUSCAR}?buscar=045678`)
+        .set('Authorization', seguridad)
+        .expect(200);
+      expect(r.body.datos).toHaveLength(1);
+    });
+
+    // El buscador solo muestra lo utilizable ahora: si apareciera algo que el
+    // servidor va a rechazar, seguridad lo intentaría en la puerta.
+    it.each([
+      [
+        'una vencida',
+        { inicio: new Date(Date.now() - 10 * HORA), fin: new Date(Date.now() - 2 * HORA) },
+      ],
+      [
+        'una que todavía no empieza',
+        { inicio: new Date(Date.now() + 2 * HORA), fin: new Date(Date.now() + 6 * HORA) },
+      ],
+      ['una usada', { estado: 'USADA' as const }],
+      ['una cancelada', { estado: 'CANCELADA' as const }],
+    ])('no devuelve %s', async (_caso, extra) => {
+      await sembrarAutorizacion(extra);
+      const r = await http()
+        .get(`${RUTA_BUSCAR}?buscar=andres`)
+        .set('Authorization', seguridad)
+        .expect(200);
+      expect(r.body.datos).toHaveLength(0);
+    });
+
+    it('responde 400 con menos de 3 caracteres', () =>
+      http()
+        .get(`${RUTA_BUSCAR}?buscar=an`)
+        .set('Authorization', seguridad)
+        .expect(400));
+
+    it.each([
+      ['residente', () => residente],
+      ['administrador', () => admin],
+    ])('responde 403 al rol %s', async (_rol, token) => {
+      await http()
+        .get(`${RUTA_BUSCAR}?buscar=andres`)
+        .set('Authorization', token())
+        .expect(403);
+    });
+
+    it('responde 401 sin sesión', () =>
+      http().get(`${RUTA_BUSCAR}?buscar=andres`).expect(401));
+  });
+
+  describe('POST entradas con autorización', () => {
+    it('registra PREAUTORIZADA y deja la autorización USADA', async () => {
+      const a = await sembrarAutorizacion();
+      const r = await entrar({ autorizacionId: a.id }).expect(201);
+      expect(r.body).toMatchObject({
+        condicion: 'PREAUTORIZADA',
+        visitanteNombre: 'Andres Lopez',
+        unidadCodigo: `${prefijo}-1`,
+      });
+      const usada = await prisma.autorizacionVisita.findUniqueOrThrow({
+        where: { id: a.id },
+      });
+      expect(usada.estado).toBe('USADA');
+      const movimiento = await prisma.movimientoVisita.findUniqueOrThrow({
+        where: { id: r.body.id },
+      });
+      expect(movimiento.salidaAt).toBeNull();
+      expect(movimiento.ingresoPorId).toBe(seguridadId);
+    });
+
+    it.each([
+      ['ya usada', { estado: 'USADA' as const }],
+      ['cancelada', { estado: 'CANCELADA' as const }],
+      [
+        'vencida',
+        { inicio: new Date(Date.now() - 10 * HORA), fin: new Date(Date.now() - 2 * HORA) },
+      ],
+      [
+        'antes de su ventana',
+        { inicio: new Date(Date.now() + 2 * HORA), fin: new Date(Date.now() + 6 * HORA) },
+      ],
+    ])('responde 409 si la autorización está %s', async (_caso, extra) => {
+      const a = await sembrarAutorizacion(extra);
+      await entrar({ autorizacionId: a.id }).expect(409);
+      expect(
+        await prisma.movimientoVisita.count({ where: { autorizacionId: a.id } }),
+      ).toBe(0);
+    });
+
+    it('responde 404 con una autorización inexistente', () =>
+      entrar({ autorizacionId: randomUUID() }).expect(404));
+
+    // El cerrojo real: la autorización es de uso único.
+    it('con dos guardias registrando a la vez, solo uno entra', async () => {
+      const a = await sembrarAutorizacion();
+      const intentos = await Promise.all([
+        entrar({ autorizacionId: a.id }),
+        entrar({ autorizacionId: a.id }),
+      ]);
+      expect(intentos.map((i) => i.status).sort((x, y) => x - y)).toEqual([
+        201, 409,
+      ]);
+      expect(
+        await prisma.movimientoVisita.count({ where: { autorizacionId: a.id } }),
+      ).toBe(1);
+    });
+  });
+
+  describe('POST entradas sin autorización', () => {
+    const manual = {
+      visitanteNombre: 'Pedro Castillo',
+      visitanteDocumento: '023456789',
+    };
+
+    it('registra SIN_AUTORIZACION con los datos que teclea seguridad', async () => {
+      const r = await entrar({ ...manual, unidadId: otraUnidadId }).expect(201);
+      expect(r.body).toMatchObject({
+        condicion: 'SIN_AUTORIZACION',
+        visitanteNombre: 'Pedro Castillo',
+        unidadCodigo: `${prefijo}-2`,
+      });
+      const movimiento = await prisma.movimientoVisita.findUniqueOrThrow({
+        where: { id: r.body.id },
+      });
+      expect(movimiento.autorizacionId).toBeNull();
+    });
+
+    it.each([
+      ['sin unidad', { ...manual }],
+      ['sin nombre', { visitanteDocumento: '023456789', unidadId: null }],
+      ['documento con guiones', { ...manual, visitanteDocumento: '0234-5678' }],
+      ['nombre muy corto', { ...manual, visitanteNombre: 'Jo' }],
+    ])('responde 400 %s', async (_caso, cuerpo) => {
+      const payload: Record<string, unknown> = { ...cuerpo };
+      if (payload.unidadId === null) payload.unidadId = unidadId;
+      await entrar(payload).expect(400);
+    });
+
+    it('responde 404 con una unidad inexistente', () =>
+      entrar({ ...manual, unidadId: randomUUID() }).expect(404));
+  });
+
+  describe('POST entradas/:id/salida', () => {
+    const conVisitaDentro = async () => {
+      const a = await sembrarAutorizacion();
+      const r = await entrar({ autorizacionId: a.id }).expect(201);
+      return r.body.id as string;
+    };
+
+    it('registra la salida y guarda quién la registró', async () => {
+      const id = await conVisitaDentro();
+      const r = await http()
+        .post(`${RUTA_ENTRADAS}/${id}/salida`)
+        .set('Authorization', seguridad)
+        .expect(200);
+      expect(r.body.salidaAt).toBeTruthy();
+      const guardado = await prisma.movimientoVisita.findUniqueOrThrow({
+        where: { id },
+      });
+      expect(guardado.salidaAt).not.toBeNull();
+      expect(guardado.salidaPorId).toBe(seguridadId);
+    });
+
+    it('responde 409 al registrar la salida dos veces', async () => {
+      const id = await conVisitaDentro();
+      await http()
+        .post(`${RUTA_ENTRADAS}/${id}/salida`)
+        .set('Authorization', seguridad)
+        .expect(200);
+      await http()
+        .post(`${RUTA_ENTRADAS}/${id}/salida`)
+        .set('Authorization', seguridad)
+        .expect(409);
+    });
+
+    it('con dos salidas simultáneas solo una cuenta', async () => {
+      const id = await conVisitaDentro();
+      const intentos = await Promise.all(
+        [1, 2].map(() =>
+          http()
+            .post(`${RUTA_ENTRADAS}/${id}/salida`)
+            .set('Authorization', seguridad),
+        ),
+      );
+      expect(intentos.map((i) => i.status).sort((x, y) => x - y)).toEqual([
+        200, 409,
+      ]);
+    });
+
+    it('responde 404 con un movimiento inexistente', () =>
+      http()
+        .post(`${RUTA_ENTRADAS}/${randomUUID()}/salida`)
+        .set('Authorization', seguridad)
+        .expect(404));
+
+    it('responde 403 al residente', async () => {
+      const id = await conVisitaDentro();
+      await http()
+        .post(`${RUTA_ENTRADAS}/${id}/salida`)
+        .set('Authorization', residente)
+        .expect(403);
+    });
+  });
+
+  describe('GET presentes', () => {
+    it('lista a quien entró y no ha salido, y deja de listarlo al salir', async () => {
+      const a = await sembrarAutorizacion();
+      const entrada = await entrar({ autorizacionId: a.id }).expect(201);
+
+      const dentro = await http()
+        .get(RUTA_PRESENTES)
+        .set('Authorization', seguridad)
+        .expect(200);
+      expect(dentro.body.total).toBe(1);
+      expect(dentro.body.datos[0]).toMatchObject({
+        visitanteNombre: 'Andres Lopez',
+        unidadCodigo: `${prefijo}-1`,
+        condicion: 'PREAUTORIZADA',
+      });
+
+      await http()
+        .post(`${RUTA_ENTRADAS}/${entrada.body.id}/salida`)
+        .set('Authorization', seguridad)
+        .expect(200);
+
+      const despues = await http()
+        .get(RUTA_PRESENTES)
+        .set('Authorization', seguridad)
+        .expect(200);
+      expect(despues.body.total).toBe(0);
+    });
+
+    it('el administrador también puede consultarla', () =>
+      http().get(RUTA_PRESENTES).set('Authorization', admin).expect(200));
+
+    it('responde 403 al residente', () =>
+      http().get(RUTA_PRESENTES).set('Authorization', residente).expect(403));
+  });
+
+  describe('GET visitas/unidades', () => {
+    const RUTA_UNIDADES = '/api/v1/visitas/unidades';
+
+    it('devuelve el catálogo de unidades activas para seguridad', async () => {
+      const r = await http()
+        .get(RUTA_UNIDADES)
+        .set('Authorization', seguridad)
+        .expect(200);
+      // Comparten base con otras pruebas: se verifica que estén, no cuántas.
+      const codigos = (r.body.datos as { codigo: string }[]).map(
+        (u) => u.codigo,
+      );
+      expect(codigos).toContain(`${prefijo}-1`);
+      expect(codigos).toContain(`${prefijo}-2`);
+    });
+
+    it('el administrador también puede consultarlo', () =>
+      http().get(RUTA_UNIDADES).set('Authorization', admin).expect(200));
+
+    it('responde 403 al residente', () =>
+      http().get(RUTA_UNIDADES).set('Authorization', residente).expect(403));
   });
 });
