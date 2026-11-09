@@ -47,6 +47,8 @@ model User {
   // Dos relaciones hacia el mismo modelo: Prisma exige nombrarlas.
   ingresosRegistrados MovimientoVisita[]   @relation("IngresosRegistrados")
   salidasRegistradas  MovimientoVisita[]   @relation("SalidasRegistradas")
+  paquetesRegistrados Paquete[]            @relation("PaquetesRegistrados")
+  paquetesEntregados  Paquete[]            @relation("PaquetesEntregados")
   refreshTokens       RefreshToken[]
 
   @@map("users")
@@ -113,6 +115,7 @@ model Unidad {
   reservas       Reserva[]
   autorizaciones AutorizacionVisita[]
   movimientos    MovimientoVisita[]
+  paquetes       Paquete[]
   cuotas         Cuota[]
 }
 
@@ -253,4 +256,42 @@ model MovimientoVisita {
   salidaPor          User?               @relation("SalidasRegistradas", fields: [salidaPorId], references: [id], onDelete: Restrict)
 
   @@index([salidaAt])
+}
+
+// Módulo 5 — Paquetería (H16).
+enum EstadoPaquete {
+  PENDIENTE
+  ENTREGADO
+}
+
+model Paquete {
+  id String @id @default(uuid()) @db.Uuid
+  // Lo arma el repositorio con la secuencia paquete_codigo_seq, que se crea a
+  // mano en la migración. Contar filas o leer el máximo no sirve: dos guardias
+  // registrando a la vez obtendrían el mismo número.
+  codigo          String        @unique @db.VarChar(20)
+  unidadId        String        @db.Uuid
+  empresa         String        @db.VarChar(60)
+  descripcion     String?       @db.VarChar(120)
+  recibidoAt      DateTime      @default(now()) @db.Timestamptz(3)
+  estado          EstadoPaquete @default(PENDIENTE)
+  // Los cuatro campos de entrega los llena H17, pero se crean desde acá: la
+  // tarjeta define el modelo completo en H16 y el historial de H19 ya los lee.
+  // Dejarlos para después obligaría a otro a agregarlos en su propia rama.
+  entregadoAt     DateTime?     @db.Timestamptz(3)
+  retiraNombre    String?       @db.VarChar(100)
+  retiraDocumento String?       @db.VarChar(20)
+  registradoPorId String        @db.Uuid
+  entregadoPorId  String?       @db.Uuid
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  unidad        Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  registradoPor User   @relation("PaquetesRegistrados", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  entregadoPor  User?  @relation("PaquetesEntregados", fields: [entregadoPorId], references: [id], onDelete: Restrict)
+
+  // Seguridad lista los pendientes más recientes (H17) y el residente su
+  // historial por unidad (H19).
+  @@index([estado, recibidoAt])
+  @@index([unidadId, recibidoAt])
 }
