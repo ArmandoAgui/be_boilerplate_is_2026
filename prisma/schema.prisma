@@ -52,8 +52,11 @@ model User {
   incidenciasCreadas   Incidencia[]        @relation("ResidenteIncidencias")
   incidenciasAsignadas Incidencia[]        @relation("ResponsableIncidencias")
   historialIncidencias HistorialIncidencia[] @relation("ActorHistorialIncidencia")
-  paquetesRecibidos Paquete[]
-  asambleasCreadas   Asamblea[]
+  // H16: conservar las dos relaciones nombradas del modelo compartido Paquete.
+  paquetesRegistrados Paquete[] @relation("PaquetesRegistrados")
+  paquetesEntregados  Paquete[] @relation("PaquetesEntregados")
+  // H20: asambleas creadas por el administrador.
+  asambleasCreadas    Asamblea[]
 
   @@map("users")
 }
@@ -121,7 +124,9 @@ model Unidad {
   movimientos    MovimientoVisita[]
   cuotas         Cuota[]
   incidencias    Incidencia[]
+  // H16: una sola relación con el modelo Paquete compartido.
   paquetes             Paquete[]
+  // H21: una participación por unidad y tema.
   participacionesVoto  ParticipacionVoto[]
 }
 
@@ -357,4 +362,113 @@ model MovimientoVisita {
   salidaPor          User?               @relation("SalidasRegistradas", fields: [salidaPorId], references: [id], onDelete: Restrict)
 
   @@index([salidaAt])
+}
+
+
+// H20/H21 — Convocatorias, agenda y votación por unidad.
+enum EstadoAsamblea {
+  BORRADOR
+  PUBLICADA
+}
+
+model Asamblea {
+  id          String         @id @default(uuid()) @db.Uuid
+  titulo      String         @db.VarChar(100)
+  fechaAt     DateTime       @db.Timestamptz(3)
+  descripcion String?        @db.VarChar(500)
+  estado      EstadoAsamblea @default(BORRADOR)
+  creadorId   String         @db.Uuid
+  publicadaAt DateTime?      @db.Timestamptz(3)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+
+  creador User           @relation(fields: [creadorId], references: [id], onDelete: Restrict)
+  temas   TemaVotacion[]
+
+  @@index([estado, fechaAt])
+  @@map("asambleas")
+}
+
+model TemaVotacion {
+  id         String   @id @default(uuid()) @db.Uuid
+  asambleaId String   @db.Uuid
+  pregunta   String   @db.VarChar(150)
+  aperturaAt DateTime @db.Timestamptz(3)
+  cierreAt   DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  asamblea      Asamblea             @relation(fields: [asambleaId], references: [id], onDelete: Restrict)
+  opciones      OpcionVoto[]
+  participaciones ParticipacionVoto[]
+  votos         Voto[]
+
+  @@index([asambleaId])
+  @@map("temas_votacion")
+}
+
+model OpcionVoto {
+  id     String @id @default(uuid()) @db.Uuid
+  temaId String @db.Uuid
+  texto  String @db.VarChar(100)
+
+  tema  TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
+  votos Voto[]
+
+  @@unique([temaId, texto])
+  @@map("opciones_voto")
+}
+
+model ParticipacionVoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  temaId    String   @db.Uuid
+  unidadId  String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
+  unidad Unidad       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([unidadId, temaId])
+  @@map("participaciones_voto")
+}
+
+model Voto {
+  id       String @id @default(uuid()) @db.Uuid
+  temaId   String @db.Uuid
+  opcionId String @db.Uuid
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
+  opcion OpcionVoto   @relation(fields: [opcionId], references: [id], onDelete: Restrict)
+
+  @@index([temaId, opcionId])
+  @@map("votos")
+}
+
+
+// H16 — Modelo compartido de paquetería. H19 reutiliza esta tabla y enum.
+enum EstadoPaquete {
+  PENDIENTE
+  ENTREGADO
+}
+
+model Paquete {
+  id String @id @default(uuid()) @db.Uuid
+  codigo          String        @unique @db.VarChar(20)
+  unidadId        String        @db.Uuid
+  empresa         String        @db.VarChar(60)
+  descripcion     String?       @db.VarChar(120)
+  recibidoAt      DateTime      @default(now()) @db.Timestamptz(3)
+  estado          EstadoPaquete @default(PENDIENTE)
+  entregadoAt     DateTime?     @db.Timestamptz(3)
+  retiraNombre    String?       @db.VarChar(100)
+  retiraDocumento String?       @db.VarChar(20)
+  registradoPorId String        @db.Uuid
+  entregadoPorId  String?       @db.Uuid
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  unidad        Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  registradoPor User   @relation("PaquetesRegistrados", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  entregadoPor  User?  @relation("PaquetesEntregados", fields: [entregadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([estado, recibidoAt])
+  @@index([unidadId, recibidoAt])
 }
