@@ -11,6 +11,8 @@ import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
 import { IncidenciasModule } from '@Incidencias';
+import { PaquetesModule } from './paquetes/paquetes.module.js';
+import { AsambleasModule } from './asambleas/asambleas.module.js';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { IncidenciasModule } from '@Incidencias';
     VisitasModule,
     CuotasModule,
     IncidenciasModule,
+    PaquetesModule,
+    AsambleasModule,
   ],
   providers: [
     {
@@ -37,4 +41,4 @@ import { IncidenciasModule } from '@Incidencias';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

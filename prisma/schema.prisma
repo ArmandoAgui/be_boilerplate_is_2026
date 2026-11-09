@@ -52,6 +52,8 @@ model User {
   incidenciasCreadas   Incidencia[]        @relation("ResidenteIncidencias")
   incidenciasAsignadas Incidencia[]        @relation("ResponsableIncidencias")
   historialIncidencias HistorialIncidencia[] @relation("ActorHistorialIncidencia")
+  paquetesRecibidos Paquete[]
+  asambleasCreadas   Asamblea[]
 
   @@map("users")
 }
@@ -119,6 +121,8 @@ model Unidad {
   movimientos    MovimientoVisita[]
   cuotas         Cuota[]
   incidencias    Incidencia[]
+  paquetes             Paquete[]
+  participacionesVoto  ParticipacionVoto[]
 }
 
 model UsuarioUnidad {
