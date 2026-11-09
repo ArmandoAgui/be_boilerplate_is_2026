@@ -42,12 +42,16 @@ model User {
   nombre         String               @default("Residente")
   telefono       String?
   unidades            UsuarioUnidad[]
-  reservas            Reserva[]
-  autorizaciones      AutorizacionVisita[]
-  // Dos relaciones hacia el mismo modelo: Prisma exige nombrarlas.
-  ingresosRegistrados MovimientoVisita[]   @relation("IngresosRegistrados")
-  salidasRegistradas  MovimientoVisita[]   @relation("SalidasRegistradas")
-  refreshTokens       RefreshToken[]
+  reservas             Reserva[]
+  autorizaciones       AutorizacionVisita[]
+  // H14: registra quién controló ingreso y salida.
+  ingresosRegistrados  MovimientoVisita[] @relation("IngresosRegistrados")
+  salidasRegistradas   MovimientoVisita[] @relation("SalidasRegistradas")
+  refreshTokens        RefreshToken[]
+  // H9: conserva autor, responsable e historial de incidencias.
+  incidenciasCreadas   Incidencia[]        @relation("ResidenteIncidencias")
+  incidenciasAsignadas Incidencia[]        @relation("ResponsableIncidencias")
+  historialIncidencias HistorialIncidencia[] @relation("ActorHistorialIncidencia")
 
   @@map("users")
 }
@@ -114,6 +118,7 @@ model Unidad {
   autorizaciones AutorizacionVisita[]
   movimientos    MovimientoVisita[]
   cuotas         Cuota[]
+  incidencias    Incidencia[]
 }
 
 model UsuarioUnidad {
@@ -136,6 +141,7 @@ model AreaComun {
   updatedAt DateTime      @updatedAt
   horarios  HorarioArea[]
   reservas  Reserva[]
+  incidencias Incidencia[]
 }
 
 model HorarioArea {
@@ -223,6 +229,100 @@ model Cuota {
 
   @@unique([unidadId, periodo, concepto])
   @@index([unidadId, estado])
+}
+
+enum LugarTipo {
+  UNIDAD
+  AREA_COMUN
+}
+
+enum Categoria {
+  FUGA
+  ELECTRICIDAD
+  ASCENSOR
+  LIMPIEZA
+  SEGURIDAD
+  OTRO
+}
+
+enum Prioridad {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum EstadoIncidencia {
+  ABIERTA
+  ASIGNADA
+  EN_PROCESO
+  RESUELTA
+}
+
+enum CampoHistorial {
+  ESTADO
+  PRIORIDAD
+  RESPONSABLE
+}
+
+model Incidencia {
+  id            String           @id @default(uuid()) @db.Uuid
+  codigo        String           @unique(map: "incidencias_codigo_key") @default(dbgenerated("incidencia_codigo()")) @db.VarChar(32)
+  residenteId   String           @map("residente_id") @db.Uuid
+  lugarTipo     LugarTipo        @map("lugar_tipo")
+  unidadId      String?          @map("unidad_id") @db.Uuid
+  areaId        String?          @map("area_id") @db.Uuid
+  categoria     Categoria
+  descripcion   String           @db.VarChar(500)
+  prioridad     Prioridad?
+  estado        EstadoIncidencia @default(ABIERTA)
+  responsableId String?          @map("responsable_id") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  residente    User                  @relation("ResidenteIncidencias", fields: [residenteId], references: [id], onDelete: Restrict)
+  responsable  User?                 @relation("ResponsableIncidencias", fields: [responsableId], references: [id], onDelete: Restrict)
+  unidad       Unidad?               @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  area         AreaComun?            @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  evidencias   EvidenciaIncidencia[]
+  historial    HistorialIncidencia[]
+
+  @@index([residenteId, createdAt(sort: Desc)], map: "incidencias_residente_created_at_idx")
+  @@index([responsableId], map: "incidencias_responsable_id_idx")
+  @@index([unidadId], map: "incidencias_unidad_id_idx")
+  @@index([areaId], map: "incidencias_area_id_idx")
+  @@map("incidencias")
+}
+
+model EvidenciaIncidencia {
+  id            String     @id @default(uuid()) @db.Uuid
+  incidenciaId  String     @map("incidencia_id") @db.Uuid
+  ruta          String     @unique(map: "evidencias_incidencia_ruta_key") @db.VarChar(255)
+  mime          String     @db.VarChar(20)
+  tamanoBytes   Int        @map("tamano_bytes")
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incidencia Incidencia @relation(fields: [incidenciaId], references: [id], onDelete: Restrict)
+
+  @@index([incidenciaId], map: "evidencias_incidencia_incidencia_id_idx")
+  @@map("evidencias_incidencia")
+}
+
+model HistorialIncidencia {
+  id             String         @id @default(uuid()) @db.Uuid
+  incidenciaId   String         @map("incidencia_id") @db.Uuid
+  campo          CampoHistorial
+  valorAnterior  String?        @map("valor_anterior") @db.VarChar(500)
+  valorNuevo     String         @map("valor_nuevo") @db.VarChar(500)
+  actorId        String         @map("actor_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incidencia Incidencia @relation(fields: [incidenciaId], references: [id], onDelete: Restrict)
+  actor      User       @relation("ActorHistorialIncidencia", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([incidenciaId, createdAt(sort: Desc)], map: "historial_incidencia_incidencia_created_at_idx")
+  @@index([actorId], map: "historial_incidencia_actor_id_idx")
+  @@map("historial_incidencia")
 }
 
 // H14 — Bitácora de accesos. Registra a todo el que entra, con autorización o sin ella.

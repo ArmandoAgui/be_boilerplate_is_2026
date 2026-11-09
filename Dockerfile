@@ -47,6 +47,11 @@ FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV UPLOADS_DIR=/uploads
+
+# El volumen nombrado de Compose se monta sobre este directorio; debe poder
+# escribirlo el usuario sin privilegios que ejecuta Nest.
+RUN mkdir -p /uploads && chown node:node /uploads && chmod 750 /uploads
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist

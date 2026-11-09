@@ -41,6 +41,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      UPLOADS_DIR: /uploads
       # Dentro de la red de Compose el host de la base es el nombre del
       # servicio (`postgres`), no `localhost`.
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-si_be_boilerplate}?schema=public
@@ -50,8 +51,11 @@ services:
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
     ports:
       - '${PORT:-3000}:3000'
+    volumes:
+      - uploads_data:/uploads
     # Aplica las migraciones pendientes antes de levantar el servidor.
     command: sh -c "npx prisma migrate deploy && node dist/main.js"
 
 volumes:
   pgdata:
+  uploads_data:

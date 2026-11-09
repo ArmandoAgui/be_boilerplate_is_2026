@@ -10,6 +10,7 @@ import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { IncidenciasModule } from '@Incidencias';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { validateEnv } from '@Config';
     ReservasModule,
     VisitasModule,
     CuotasModule,
+    IncidenciasModule,
   ],
   providers: [
     {

@@ -10,6 +10,7 @@ export interface EnvConfig {
   NODE_ENV: string;
   PORT: number;
   DATABASE_URL: string;
+  UPLOADS_DIR: string;
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string;
   REFRESH_TOKEN_EXPIRES_IN_DAYS: number;
@@ -69,10 +70,16 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     );
   }
 
+  const uploadsDir = readString(raw, 'UPLOADS_DIR', './uploads').trim();
+  if (!uploadsDir) {
+    throw new Error('La variable de entorno UPLOADS_DIR no puede estar vacía.');
+  }
+
   return {
     NODE_ENV: readString(raw, 'NODE_ENV', 'development'),
     PORT: readInt(raw, 'PORT', 3000),
     DATABASE_URL: readString(raw, 'DATABASE_URL', ''),
+    UPLOADS_DIR: uploadsDir,
     JWT_SECRET: jwtSecret,
     JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '15m'),
     REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
