@@ -122,6 +122,7 @@ model Unidad {
   reservas       Reserva[]
   autorizaciones AutorizacionVisita[]
   movimientos    MovimientoVisita[]
+  paquetes       Paquete[]
   cuotas         Cuota[]
   incidencias    Incidencia[]
   // H16: una sola relación con el modelo Paquete compartido.
