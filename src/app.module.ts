@@ -1,3 +1,4 @@
+import { ComunicadosModule } from './comunicados/comunicados.module.js';
 import { ReservasModule } from './reservas/reservas.module.js';
 import { VisitasModule } from './visitas/visitas.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
@@ -30,6 +31,7 @@ import { AsambleasModule } from './asambleas/asambleas.module.js';
     ReservasModule,
     VisitasModule,
     CuotasModule,
+    ComunicadosModule,
     IncidenciasModule,
     AsambleasModule,
     UnidadesModule,
@@ -43,4 +45,4 @@ import { AsambleasModule } from './asambleas/asambleas.module.js';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

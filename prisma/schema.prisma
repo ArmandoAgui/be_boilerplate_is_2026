@@ -57,6 +57,8 @@ model User {
   paquetesEntregados  Paquete[] @relation("PaquetesEntregados")
   // H20: asambleas creadas por el administrador.
   asambleasCreadas    Asamblea[]
+  comunicadosCreados  Comunicado[]
+  lecturasComunicado  LecturaComunicado[]
 
   @@map("users")
 }
@@ -95,6 +97,7 @@ enum EstadoReserva {
 model Torre {
   id        String    @id @default(uuid()) @db.Uuid
   nombre    String    @unique @db.VarChar(30)
+  comunicados Comunicado[]
   secciones Seccion[]
   unidades  Unidad[]
 }
@@ -105,6 +108,7 @@ model Seccion {
   torreId  String   @db.Uuid
   torre    Torre    @relation(fields: [torreId], references: [id], onDelete: Restrict)
   unidades Unidad[]
+  comunicados Comunicado[]
 
   @@unique([torreId, nombre])
   @@unique([id, torreId])
@@ -470,4 +474,40 @@ model Paquete {
 
   @@index([estado, recibidoAt])
   @@index([unidadId, recibidoAt])
+}
+
+// EP-07 — H23 publica; H24 registra lecturas.
+enum Alcance {
+  TODOS
+  TORRE
+  SECCION
+}
+
+model Comunicado {
+  id String @id @default(uuid()) @db.Uuid
+  titulo String @db.VarChar(100)
+  contenido String @db.VarChar(2000)
+  alcance Alcance
+  torreId String? @db.Uuid
+  seccionId String? @db.Uuid
+  autorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  torre Torre? @relation(fields: [torreId], references: [id], onDelete: Restrict)
+  seccion Seccion? @relation(fields: [seccionId], references: [id], onDelete: Restrict)
+  autor User @relation(fields: [autorId], references: [id], onDelete: Restrict)
+  lecturas LecturaComunicado[]
+  @@index([createdAt, id])
+  @@index([torreId])
+  @@index([seccionId])
+}
+
+model LecturaComunicado {
+  id String @id @default(uuid()) @db.Uuid
+  comunicadoId String @db.Uuid
+  userId String @db.Uuid
+  leidoAt DateTime @default(now()) @db.Timestamptz(3)
+  comunicado Comunicado @relation(fields: [comunicadoId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@unique([comunicadoId, userId])
+  @@index([userId])
 }
