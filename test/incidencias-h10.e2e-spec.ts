@@ -699,7 +699,7 @@ describe.skipIf(!testUrl)('H10 HTTP + PostgreSQL local aislado', () => {
       .send({ prioridad: 'ALTA' })
       .expect(404);
 
-    const cuerpos: Array<unknown> = [
+    const cuerpos: Array<object> = [
       {},
       [],
       { prioridad: null },
