@@ -32,6 +32,20 @@ export class ComunicadosService {
     this.administrador(user);
     return this.repo.administracion(query);
   }
+  private residente(user: User) {
+    if (user.rol !== 'RESIDENTE')
+      throw new ForbiddenException(
+        'No tienes permiso para realizar esta operación',
+      );
+  }
+  mios(user: User, query: PaginaComunicadosDto) {
+    this.residente(user);
+    return this.repo.mios(user.id, query);
+  }
+  detalle(user: User, id: string) {
+    this.residente(user);
+    return this.repo.detalle(user.id, id);
+  }
   async crear(user: User, dto: CrearComunicadoDto) {
     this.administrador(user);
     const creado = await this.repo.crear(user.id, dto);

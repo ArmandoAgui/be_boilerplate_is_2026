@@ -101,6 +101,70 @@ export class ComunicadosRepository {
       { isolationLevel: 'RepeatableRead' },
     );
   }
+  private audiencia(userId: string): Prisma.ComunicadoWhereInput {
+    const unidades = { some: { usuarios: { some: { userId } } } };
+    return {
+      OR: [
+        { alcance: 'TODOS' },
+        { alcance: 'TORRE', torre: { unidades } },
+        { alcance: 'SECCION', seccion: { unidades } },
+      ],
+    };
+  }
+  mios(userId: string, query: PaginaComunicadosDto) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const where = this.audiencia(userId);
+        const filas = await tx.comunicado.findMany({
+          where,
+          select: {
+            id: true,
+            titulo: true,
+            alcance: true,
+            createdAt: true,
+            lecturas: { where: { userId }, select: { id: true } },
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip: (query.pagina - 1) * query.tamanoPagina,
+          take: query.tamanoPagina,
+        });
+        return {
+          datos: filas.map((c) => ({
+            id: c.id,
+            titulo: c.titulo,
+            alcance: c.alcance,
+            creadoAt: c.createdAt,
+            leido: c.lecturas.length > 0,
+          })),
+          total: await tx.comunicado.count({ where }),
+          pagina: query.pagina,
+          tamanoPagina: query.tamanoPagina,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  detalle(userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const c = await tx.comunicado.findFirst({
+        where: { id, ...this.audiencia(userId) },
+      });
+      if (!c) throw new NotFoundException('Comunicado inexistente');
+      // Upsert nativo sobre clave compuesta: recargas y accesos concurrentes no duplican lectura.
+      await tx.lecturaComunicado.upsert({
+        where: { comunicadoId_userId: { comunicadoId: id, userId } },
+        create: { comunicadoId: id, userId },
+        update: {},
+      });
+      return {
+        id: c.id,
+        titulo: c.titulo,
+        contenido: c.contenido,
+        alcance: c.alcance,
+        creadoAt: c.createdAt,
+      };
+    });
+  }
   administracion(query: PaginaComunicadosDto) {
     return this.prisma.$transaction(
       async (tx) => {
