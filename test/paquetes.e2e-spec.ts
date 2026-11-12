@@ -5,7 +5,16 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import type { NotificacionesService as ServicioNotificaciones } from '../src/notificaciones/services/notificaciones.service.js';
 
 const url = process.env.TEST_DATABASE_URL;
 if (url && !new URL(url).pathname.endsWith('_test'))
@@ -19,15 +28,13 @@ const RUTA_UNIDADES = '/api/v1/unidades';
 describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => {
   let app: INestApplication;
   let prisma: import('../dist/prisma/services/prisma.service.js').PrismaService;
-  let residente: string, admin: string, seguridad: string;
+  let residente: string, vecino: string, admin: string, seguridad: string;
+  let residenteId: string, vecinoId: string;
   let seguridadId: string;
+  let notificaciones: ServicioNotificaciones;
   let unidadId: string, otraUnidadId: string, inactivaId: string;
   const users: string[] = [];
   const prefijo = `e2e-${randomUUID()}`;
-
-  // El doble de H28 deja probar los dos criterios de la tarjeta: que se avisa
-  // y que un fallo del aviso no deshace el registro del paquete.
-  const avisos = { fallar: false, llamadas: [] as { codigo: string }[] };
 
   const http = () => request(app.getHttpServer());
   const body = (extra: Record<string, unknown> = {}) => ({
@@ -44,23 +51,13 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
     process.env.JWT_SECRET = 'clave-aislada-exclusiva-pruebas-paquetes-2026';
     process.env.NODE_ENV = 'test';
     const { AppModule } = await import('../dist/app.module.js');
-    const { PrismaService } = await import(
-      '../dist/prisma/services/prisma.service.js'
-    );
-    const { AvisosPaquete } = await import(
-      '../dist/paquetes/services/avisos.service.js'
-    );
-    const mod = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AvisosPaquete)
-      .useValue({
-        paqueteRecibido: (aviso: { codigo: string }) => {
-          avisos.llamadas.push(aviso);
-          return avisos.fallar
-            ? Promise.reject(new Error('H28 no responde'))
-            : Promise.resolve();
-        },
-      })
-      .compile();
+    const { PrismaService } =
+      await import('../dist/prisma/services/prisma.service.js');
+    const { NotificacionesService } =
+      await import('../dist/notificaciones/services/notificaciones.service.js');
+    const mod = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = mod.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
@@ -72,6 +69,7 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
     );
     await app.init();
     prisma = app.get(PrismaService);
+    notificaciones = app.get(NotificacionesService);
 
     const jwt = app.get(JwtService);
     const hash = await bcrypt.hash('Prueba123!', 4);
@@ -94,7 +92,12 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
       };
     };
 
-    residente = (await crearUser('RESIDENTE', 'residente')).token;
+    const r = await crearUser('RESIDENTE', 'residente');
+    residente = r.token;
+    residenteId = r.id;
+    const v = await crearUser('RESIDENTE', 'vecino');
+    vecino = v.token;
+    vecinoId = v.id;
     admin = (await crearUser('ADMINISTRADOR', 'admin')).token;
     const s = await crearUser('SEGURIDAD', 'seguridad');
     seguridad = s.token;
@@ -119,11 +122,17 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
     unidadId = (await unidad(`${prefijo}-1`)).id;
     otraUnidadId = (await unidad(`${prefijo}-2`)).id;
     inactivaId = (await unidad(`${prefijo}-3`, false)).id;
+    await prisma.usuarioUnidad.createMany({
+      data: [
+        { userId: residenteId, unidadId },
+        { userId: vecinoId, unidadId: otraUnidadId },
+      ],
+    });
   });
 
   beforeEach(async () => {
-    avisos.fallar = false;
-    avisos.llamadas.length = 0;
+    vi.restoreAllMocks();
+    await prisma.notificacion.deleteMany({ where: { userId: { in: users } } });
     await prisma.paquete.deleteMany({
       where: { registradoPorId: { in: users } },
     });
@@ -134,13 +143,18 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
       await prisma.paquete.deleteMany({
         where: { registradoPorId: { in: users } },
       });
+      await prisma.usuarioUnidad.deleteMany({
+        where: { userId: { in: users } },
+      });
       await prisma.unidad.deleteMany({
         where: { codigo: { startsWith: prefijo } },
       });
       await prisma.seccion.deleteMany({
         where: { torre: { nombre: prefijo.slice(0, 30) } },
       });
-      await prisma.torre.deleteMany({ where: { nombre: prefijo.slice(0, 30) } });
+      await prisma.torre.deleteMany({
+        where: { nombre: prefijo.slice(0, 30) },
+      });
       await prisma.user.deleteMany({ where: { id: { in: users } } });
     }
     await app?.close();
@@ -180,19 +194,65 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
       expect(r.body.empresa).toBe('DHL');
     });
 
-    it('avisa a la unidad después de registrar', async () => {
+    it('avisa solo a los residentes de la unidad después de registrar', async () => {
       const r = await registrar(body()).expect(201);
-      expect(avisos.llamadas).toHaveLength(1);
-      expect(avisos.llamadas[0].codigo).toBe(r.body.codigo);
+      const avisos = await prisma.notificacion.findMany({
+        where: { referenciaId: r.body.id },
+        select: {
+          userId: true,
+          moduloOrigen: true,
+          tipoEvento: true,
+          titulo: true,
+          mensaje: true,
+          claveEvento: true,
+          estado: true,
+        },
+      });
+      expect(avisos).toHaveLength(1);
+      expect(avisos[0]).toMatchObject({
+        userId: residenteId,
+        moduloOrigen: 'PAQUETERIA',
+        tipoEvento: 'PAQUETE_RECIBIDO',
+        titulo: 'Llegó un paquete para tu unidad',
+        mensaje: `El paquete ${r.body.codigo} está disponible en recepción.`,
+        claveEvento: `PAQUETE_RECIBIDO:${r.body.id}`,
+        estado: 'NO_LEIDA',
+      });
+      expect(avisos.some((aviso) => aviso.userId === vecinoId)).toBe(false);
+      const bandejaResidente = await http()
+        .get('/api/v1/notificaciones/mias')
+        .set('Authorization', residente)
+        .expect(200);
+      expect(
+        bandejaResidente.body.datos.some(
+          (aviso: { referenciaId: string }) => aviso.referenciaId === r.body.id,
+        ),
+      ).toBe(true);
+      const bandejaVecino = await http()
+        .get('/api/v1/notificaciones/mias')
+        .set('Authorization', vecino)
+        .expect(200);
+      expect(
+        bandejaVecino.body.datos.some(
+          (aviso: { referenciaId: string }) => aviso.referenciaId === r.body.id,
+        ),
+      ).toBe(false);
     });
 
     // La tarjeta lo pide explícitamente: el aviso es posterior al commit.
     it('deja el paquete registrado aunque el aviso falle', async () => {
-      avisos.fallar = true;
+      vi.spyOn(notificaciones, 'crear').mockImplementationOnce(() => {
+        throw new Error('H28 no responde');
+      });
       const r = await registrar(body()).expect(201);
       expect(
         await prisma.paquete.findUnique({ where: { id: r.body.id } }),
       ).not.toBeNull();
+      expect(
+        await prisma.notificacion.count({
+          where: { referenciaId: r.body.id },
+        }),
+      ).toBe(0);
     });
 
     // Cada caso arma su cuerpo entero dentro de una función: los argumentos de
@@ -222,8 +282,11 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
       await registrar(cuerpo()).expect(400);
     });
 
-    it('responde 404 con una unidad inexistente', () =>
-      registrar(body({ unidadId: randomUUID() })).expect(404));
+    it('no avisa cuando el registro falla por unidad inexistente', async () => {
+      const crearAviso = vi.spyOn(notificaciones, 'crear');
+      await registrar(body({ unidadId: randomUUID() })).expect(404);
+      expect(crearAviso).not.toHaveBeenCalled();
+    });
 
     // Para la recepción, una unidad dada de baja es lo mismo que inexistente.
     it('responde 404 con una unidad inactiva', () =>
@@ -241,7 +304,10 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
 
     // El cerrojo de verdad: la secuencia de Postgres, no el índice único.
     it('con dos registros simultáneos los códigos son distintos', async () => {
-      const intentos = await Promise.all([registrar(body()), registrar(body())]);
+      const intentos = await Promise.all([
+        registrar(body()),
+        registrar(body()),
+      ]);
       expect(intentos.map((i) => i.status)).toEqual([201, 201]);
       const [uno, otro] = intentos.map((i) => i.body.codigo as string);
       expect(uno).not.toBe(otro);
@@ -362,7 +428,6 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
 
     it('responde 403 al residente', () => listar('', residente).expect(403));
 
-    it('responde 401 sin sesión', () =>
-      http().get(RUTA_UNIDADES).expect(401));
+    it('responde 401 sin sesión', () => http().get(RUTA_UNIDADES).expect(401));
   });
 });

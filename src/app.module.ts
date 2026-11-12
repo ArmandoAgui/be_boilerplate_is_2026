@@ -16,6 +16,7 @@ import { IncidenciasModule } from '@Incidencias';
 import { PaquetesModule } from './paquetes/paquetes.module.js';
 import { AsambleasModule } from './asambleas/asambleas.module.js';
 import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { NotificacionesModule } from './notificaciones/notificaciones.module.js'
       // Si falta DATABASE_URL o JWT_SECRET, la app no arranca.
       validate: validateEnv,
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     UsersModule,

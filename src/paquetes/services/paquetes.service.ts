@@ -1,9 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { User } from '@PrismaClient';
+import { NotificacionesService } from '../../notificaciones/services/notificaciones.service.js';
 import { PaquetesRepository } from '../repositories/paquetes.repository.js';
-import { AvisosPaquete } from './avisos.service.js';
 import { permitir } from './paquetes.rules.js';
-import type { CrearPaqueteDto, ListarPaquetesDto } from '../dto/paquetes.dto.js';
+import type {
+  CrearPaqueteDto,
+  ListarPaquetesDto,
+} from '../dto/paquetes.dto.js';
 
 @Injectable()
 export class PaquetesService {
@@ -11,7 +14,7 @@ export class PaquetesService {
 
   constructor(
     private readonly repo: PaquetesRepository,
-    private readonly avisos: AvisosPaquete,
+    private readonly notificaciones: NotificacionesService,
   ) {}
 
   async registrar(user: User, data: CrearPaqueteDto) {
@@ -34,19 +37,22 @@ export class PaquetesService {
 
     // Fuera de la transacción y sin propagar el error: la tarjeta pide que el
     // paquete quede registrado aunque el aviso falle.
-    await this.avisos
-      .paqueteRecibido({
-        paqueteId: paquete.id,
-        codigo: paquete.codigo,
-        unidadId: paquete.unidadId,
-        empresa: paquete.empresa,
-      })
-      .catch((error: unknown) =>
-        this.log.error(
-          `El paquete ${paquete.codigo} quedó registrado pero su aviso falló`,
-          error instanceof Error ? error.stack : String(error),
-        ),
+    try {
+      await this.notificaciones.crear({
+        destinatario: { tipo: 'UNIDAD', id: paquete.unidadId },
+        tipoEvento: 'PAQUETE_RECIBIDO',
+        moduloOrigen: 'PAQUETERIA',
+        titulo: 'Llegó un paquete para tu unidad',
+        mensaje: `El paquete ${paquete.codigo} está disponible en recepción.`,
+        referenciaId: paquete.id,
+        claveEvento: `PAQUETE_RECIBIDO:${paquete.id}`,
+      });
+    } catch (error) {
+      this.log.error(
+        `El paquete ${paquete.id} (${paquete.codigo}) quedó registrado pero falló PAQUETE_RECIBIDO`,
+        error instanceof Error ? error.stack : String(error),
       );
+    }
 
     return {
       id: paquete.id,

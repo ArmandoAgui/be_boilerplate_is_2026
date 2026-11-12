@@ -398,6 +398,7 @@ model TemaVotacion {
   pregunta   String   @db.VarChar(150)
   aperturaAt DateTime @db.Timestamptz(3)
   cierreAt   DateTime @db.Timestamptz(3)
+  notificadoApertura Boolean @default(false) @map("notificado_apertura")
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
   asamblea      Asamblea             @relation(fields: [asambleaId], references: [id], onDelete: Restrict)

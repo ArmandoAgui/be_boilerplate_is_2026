@@ -3,6 +3,8 @@ import { PrismaService } from '@Prisma/services';
 import type { Prisma } from '@PrismaClient';
 import { CONCEPTO_MANTENIMIENTO } from '../services/cuotas.rules.js';
 
+export const CUOTAS_POR_VENCER_TAMANO_LOTE = 100;
+
 /**
  * Único lugar del módulo que habla con Prisma. Cada método acepta una
  * transacción opcional para que el servicio pueda agrupar lecturas y
@@ -127,6 +129,20 @@ export class CuotasRepository {
     return this.prisma.cuota.findMany({
       where: { unidadId, ...filtro },
       orderBy: [{ fechaVencimiento: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /** Lote de cuotas pendientes para el día exacto, paginado por ID estable. */
+  cuotasPendientesPorVencer(fecha: Date, despuesDeId?: string) {
+    return this.prisma.cuota.findMany({
+      where: {
+        estado: 'PENDIENTE',
+        fechaVencimiento: fecha,
+        ...(despuesDeId ? { id: { gt: despuesDeId } } : {}),
+      },
+      select: { id: true, unidadId: true, fechaVencimiento: true },
+      orderBy: { id: 'asc' },
+      take: CUOTAS_POR_VENCER_TAMANO_LOTE,
     });
   }
 }
