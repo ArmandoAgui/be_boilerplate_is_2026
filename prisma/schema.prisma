@@ -59,6 +59,7 @@ model User {
   asambleasCreadas    Asamblea[]
   comunicadosCreados  Comunicado[]
   lecturasComunicado  LecturaComunicado[]
+  notificaciones     Notificacion[]
 
   @@map("users")
 }
@@ -510,4 +511,46 @@ model LecturaComunicado {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   @@unique([comunicadoId, userId])
   @@index([userId])
+}
+
+// H27 define la bandeja; H28 reutiliza este catálogo y modelo para crear avisos.
+enum ModuloOrigen {
+  CUOTAS
+  PAQUETERIA
+  COMUNICADOS
+  ASAMBLEAS
+  INCIDENCIAS
+}
+
+enum TipoEvento {
+  CUOTA_POR_VENCER
+  PAQUETE_RECIBIDO
+  COMUNICADO_NUEVO
+  VOTACION_ABIERTA
+  INCIDENCIA_RESUELTA
+}
+
+enum EstadoNotificacion {
+  NO_LEIDA
+  LEIDA
+}
+
+model Notificacion {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  moduloOrigen ModuloOrigen       @map("modulo_origen")
+  tipoEvento   TipoEvento         @map("tipo_evento")
+  titulo       String             @db.VarChar(100)
+  mensaje      String             @db.VarChar(300)
+  referenciaId String?            @map("referencia_id") @db.Uuid
+  claveEvento  String             @map("clave_evento") @db.VarChar(120)
+  estado       EstadoNotificacion @default(NO_LEIDA)
+  leidaAt      DateTime?          @map("leida_at") @db.Timestamptz(3)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, claveEvento])
+  @@index([userId, createdAt])
+  @@map("notificaciones")
 }

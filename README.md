@@ -17,6 +17,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Autenticación](#autenticación)
 - [Endpoints](#endpoints)
 - [H9: Reportar una incidencia](#h9-reportar-una-incidencia)
+- [H27: Consultar avisos](#h27-consultar-avisos)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -298,6 +299,8 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado |
 | `POST` | `/incidencias` | Bearer (residente) | `201` | Registra una incidencia con hasta tres fotos privadas |
 | `GET` | `/incidencias/:incidenciaId/evidencias/:evidenciaId` | Bearer | `200` | Lee una evidencia si el usuario tiene permiso |
+| `GET` | `/notificaciones/mias` | Bearer (residente) | `200` | Lista los avisos propios y el contador de no leídos |
+| `PATCH` | `/notificaciones/:id/lectura` | Bearer (residente) | `200` | Marca un aviso propio como leído de forma idempotente |
 
 ### Ejemplos
 
@@ -547,3 +550,7 @@ Pruebas: `npm test` y `TEST_DATABASE_URL=... npm run test:e2e` sobre una BD aisl
 ## H9: Reportar una incidencia
 
 El backend permite a un residente activo reportar una incidencia en una unidad vinculada o un área común activa, con hasta tres fotos JPG/PNG privadas. Requiere `Authorization: Bearer <accessToken>`. El contrato, permisos, integración con Next.js, migración, almacenamiento, comandos Git Bash y resultados de validación están en [docs/H9-reportar-incidencia.md](docs/H9-reportar-incidencia.md).
+
+## H27: Consultar avisos
+
+Un Residente activo puede consultar su bandeja paginada y marcar sus propios avisos como leídos. El contador incluye todas sus notificaciones no leídas, aunque la lista esté filtrada. Los permisos, filtros, ejemplos de respuesta, decisiones de privacidad y el contrato de datos para H28 están en [docs/H27-consultar-avisos.md](docs/H27-consultar-avisos.md).
