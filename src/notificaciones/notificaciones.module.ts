@@ -7,6 +7,7 @@ import { NotificacionIdPipe } from './pipes/notificacion-id.pipe.js';
 import { NotificacionesRepository } from './repositories/notificaciones.repository.js';
 import { BandejaNotificacionesService } from './services/bandeja-notificaciones.service.js';
 import { NotificacionesActorService } from './services/notificaciones-actor.service.js';
+import { NotificacionesService } from './services/notificaciones.service.js';
 
 @Module({
   imports: [PrismaModule, UsersModule],
@@ -15,9 +16,10 @@ import { NotificacionesActorService } from './services/notificaciones-actor.serv
     BandejaNotificacionesService,
     NotificacionesRepository,
     NotificacionesActorService,
+    NotificacionesService,
     ResidenteNotificacionesGuard,
     NotificacionIdPipe,
   ],
-  exports: [BandejaNotificacionesService],
+  exports: [BandejaNotificacionesService, NotificacionesService],
 })
 export class NotificacionesModule {}

@@ -14,13 +14,14 @@ import {
   vi,
 } from 'vitest';
 import type { PrismaService as Db } from '../src/prisma/services/prisma.service.js';
+import type { NotificacionesService as ServicioNotificaciones } from '../src/notificaciones/services/notificaciones.service.js';
 const url = process.env.TEST_DATABASE_URL;
 if (url && !new URL(url).pathname.endsWith('_test'))
   throw new Error('Se requiere una base aislada _test');
 describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
   let app: INestApplication;
   let db: Db;
-  const aviso = vi.fn().mockResolvedValue(undefined);
+  let notificaciones: ServicioNotificaciones;
   const ids = {
     admin: randomUUID(),
     residente: randomUUID(),
@@ -53,12 +54,11 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
     const { AppModule } = await import('../dist/app.module.js');
     const { PrismaService } =
       await import('../dist/prisma/services/prisma.service.js');
-    const { AvisosComunicados } =
-      await import('../dist/comunicados/avisos-comunicados.service.js');
-    const mod = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AvisosComunicados)
-      .useValue({ crear: aviso })
-      .compile();
+    const { NotificacionesService } =
+      await import('../dist/notificaciones/services/notificaciones.service.js');
+    const mod = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = mod.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
@@ -70,6 +70,7 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
     );
     await app.init();
     db = app.get(PrismaService);
+    notificaciones = app.get(NotificacionesService);
     const jwt = app.get(JwtService);
     for (const nombre of [
       'admin',
@@ -137,7 +138,7 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
     });
   }, 30000);
   beforeEach(() => {
-    aviso.mockReset().mockResolvedValue(undefined);
+    vi.restoreAllMocks();
   });
   afterAll(async () => {
     if (db) {
@@ -229,31 +230,73 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
       expect(almacenado.seccionId).toBe(
         alcance === 'SECCION' ? ids.seccion : null,
       );
-      expect(aviso).toHaveBeenLastCalledWith(
-        expect.objectContaining({
+      const avisos = await db.notificacion.findMany({
+        where: { referenciaId: r.body.id },
+        select: {
+          userId: true,
+          moduloOrigen: true,
+          tipoEvento: true,
+          titulo: true,
+          mensaje: true,
+          claveEvento: true,
+          estado: true,
+        },
+      });
+      const esperados =
+        alcance === 'TODOS'
+          ? [ids.residente, ids.vecino, ids.otro]
+          : [ids.residente, ids.vecino];
+      expect(avisos.map(({ userId }) => userId).sort()).toEqual(
+        esperados.sort(),
+      );
+      expect(avisos).toHaveLength(esperados.length);
+      for (const aviso of avisos) {
+        expect(aviso).toMatchObject({
+          moduloOrigen: 'COMUNICADOS',
           tipoEvento: 'COMUNICADO_NUEVO',
           titulo: 'Nuevo comunicado',
+          mensaje: 'Aviso oficial',
           claveEvento: `COMUNICADO_NUEVO:${r.body.id}`,
-          destinatario: {
-            tipo: alcance,
-            ...(destinoId ? { id: destinoId } : {}),
-          },
-        }),
-      );
+          estado: 'NO_LEIDA',
+        });
+      }
+      const bandejaResidente = await http()
+        .get('/api/v1/notificaciones/mias')
+        .set('Authorization', tokens.residente)
+        .expect(200);
+      expect(
+        bandejaResidente.body.datos.some(
+          (aviso: { referenciaId: string }) => aviso.referenciaId === r.body.id,
+        ),
+      ).toBe(true);
+      const bandejaOtro = await http()
+        .get('/api/v1/notificaciones/mias')
+        .set('Authorization', tokens.otro)
+        .expect(200);
+      expect(
+        bandejaOtro.body.datos.some(
+          (aviso: { referenciaId: string }) => aviso.referenciaId === r.body.id,
+        ),
+      ).toBe(alcance === 'TODOS');
     }
   });
   it('el aviso se llama después del commit y su fallo no despublica', async () => {
-    aviso.mockImplementationOnce(async (datos: { referenciaId: string }) => {
+    vi.spyOn(notificaciones, 'crear').mockImplementationOnce(async (datos) => {
+      expect(datos.referenciaId).toEqual(expect.any(String));
       expect(
-        await db.comunicado.findUnique({ where: { id: datos.referenciaId } }),
+        await db.comunicado.findUnique({ where: { id: datos.referenciaId! } }),
       ).not.toBeNull();
       throw new Error('H28 falla deliberadamente');
     });
     const r = await publicar().expect(201);
     comunicados.push(r.body.id);
     expect(await db.comunicado.count({ where: { id: r.body.id } })).toBe(1);
+    expect(
+      await db.notificacion.count({ where: { referenciaId: r.body.id } }),
+    ).toBe(0);
   });
   it('valida largos, alcance y destino y no permite atribuir otro autor', async () => {
+    const crearAviso = vi.spyOn(notificaciones, 'crear');
     for (const extra of [
       { titulo: '' },
       { titulo: '    ' },
@@ -272,6 +315,7 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
       await publicar(body(extra)).expect(400);
     for (const alcance of ['TORRE', 'SECCION'])
       await publicar(body({ alcance, destinoId: randomUUID() })).expect(404);
+    expect(crearAviso).not.toHaveBeenCalled();
     const valido = await publicar(
       body({ titulo: 'x'.repeat(100), contenido: 'x'.repeat(2000) }),
     ).expect(201);
