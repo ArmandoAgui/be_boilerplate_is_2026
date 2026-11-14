@@ -30,6 +30,7 @@ import {
   AdministradorIncidenciasRequeridoError,
   IncidenciaResueltaError,
   IncidenciaEvidenciaNoEncontradaError,
+  NotificacionesH28FallidasError,
   NotificacionesH28NoDisponiblesError,
   ResponsableIncidenciaNoValidoError,
   SolicitudAsignacionVaciaError,
@@ -196,8 +197,7 @@ export class IncidenciasService {
           solicitud.estado,
         );
 
-        // Mantiene RESUELTA sin cambios mientras H28 aún no esté integrado;
-        // no se confirma una resolución que no pueda emitir su aviso.
+        // Nunca confirmar RESUELTA si el proveedor real de H28 no está enlazado.
         if (
           transicion.estadoDestino === EstadoIncidencia.RESUELTA &&
           !this.notificacionesH28
@@ -232,7 +232,7 @@ export class IncidenciasService {
           }),
           error instanceof Error ? error.stack : undefined,
         );
-        throw error;
+        throw new NotificacionesH28FallidasError();
       }
     }
 

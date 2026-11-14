@@ -18,7 +18,8 @@ export type IncidenciaDomainErrorCode =
   | 'PRIORIDAD_NO_VALIDA'
   | 'ESTADO_DESTINO_NO_VALIDO'
   | 'TRANSICION_ESTADO_INVALIDA'
-  | 'NOTIFICACIONES_NO_DISPONIBLES';
+  | 'NOTIFICACIONES_NO_DISPONIBLES'
+  | 'NOTIFICACIONES_H28_FALLIDAS';
 
 export class IncidenciaDomainError extends Error {
   constructor(
@@ -146,6 +147,16 @@ export class NotificacionesH28NoDisponiblesError extends IncidenciaDomainError {
   }
 }
 
+/** Oculta errores internos de H28 y conserva la respuesta común 500 de H11. */
+export class NotificacionesH28FallidasError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'NOTIFICACIONES_H28_FALLIDAS',
+      'No se pudo completar la operación. Intente de nuevo.',
+    );
+  }
+}
+
 export class IncidenciaResueltaError extends IncidenciaDomainError {
   constructor() {
     super(
@@ -196,6 +207,10 @@ const HTTP_ERROR_BY_CODE: Record<
   ESTADO_DESTINO_NO_VALIDO: { status: 400, error: 'Bad Request' },
   TRANSICION_ESTADO_INVALIDA: { status: 409, error: 'Conflict' },
   NOTIFICACIONES_NO_DISPONIBLES: {
+    status: 500,
+    error: 'Internal Server Error',
+  },
+  NOTIFICACIONES_H28_FALLIDAS: {
     status: 500,
     error: 'Internal Server Error',
   },

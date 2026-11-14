@@ -253,7 +253,7 @@ export class IncidenciasController {
   @ApiOperation({
     summary: 'Actualizar el estado de una incidencia',
     description:
-      'H11 permite únicamente ASIGNADA → EN_PROCESO y EN_PROCESO → RESUELTA. Cada transición se confirma con una sola entrada ESTADO en el historial. La resolución requiere el proveedor H28; mientras no esté integrado, la solicitud no modifica la incidencia.',
+      'H11 permite únicamente ASIGNADA → EN_PROCESO y EN_PROCESO → RESUELTA. Cada transición se confirma con una sola entrada ESTADO en el historial. Al resolver, H28 guarda después del commit un aviso privado para el residente autor.',
   })
   @ApiParam({
     name: 'id',
@@ -295,7 +295,7 @@ export class IncidenciasController {
   })
   @ApiInternalServerErrorResponse({
     description:
-      'Error interno. Si H28 aún no está integrado, la resolución se rechaza antes de modificar la incidencia; si falla después de un commit con H28 presente, el estado puede haber quedado RESUELTA.',
+      'Error interno. Si H28 falla después del commit, la incidencia y su historial permanecen en RESUELTA; el fallo queda registrado para diagnóstico.',
     type: IncidenciaErrorDto,
   })
   async actualizarEstado(
