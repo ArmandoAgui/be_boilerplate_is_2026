@@ -9,8 +9,11 @@ import type {
   LugarIncidencia,
 } from '../dto/crear-incidencia.dto.js';
 import type { ListarIncidenciasDto } from '../dto/listar-incidencias.dto.js';
+import type { ListarIncidenciasMiasDto } from '../dto/listar-incidencias-mias.dto.js';
+import type { IncidenciaMiaEntity } from '../dto/incidencias-mias.dto.js';
 import type { ListarResponsablesDto } from '../dto/listar-responsables.dto.js';
 import type { IncidenciaCreadaEntity } from '../dto/incidencia-creada.dto.js';
+import type { IncidenciaDetalleEntity } from '../dto/incidencia-detalle.dto.js';
 import type {
   CandidatoResponsableAsignacion,
   IncidenciaAsignacionActual,
@@ -20,6 +23,11 @@ import type {
   EstadoIncidenciaDestino,
   TransicionEstadoIncidencia,
 } from '../services/estado-incidencia.rules.js';
+import type {
+  ActorIncidenciaLectura,
+  AlcanceIncidenciaLectura,
+  IncidenciaUserRole,
+} from '../services/incidencias-lectura.rules.js';
 import {
   AreaIncidenciaInactivaError,
   AreaIncidenciaInexistenteError,
@@ -34,7 +42,7 @@ import {
 } from '../errors/incidencias.errors.js';
 import type { EvidenciaArchivoAlmacenada } from '../storage/evidencias.storage.js';
 
-export type IncidenciaUserRole = 'RESIDENTE' | 'ADMINISTRADOR' | 'SEGURIDAD';
+export type { IncidenciaUserRole } from '../services/incidencias-lectura.rules.js';
 
 export interface IncidenciaUserAccess {
   isActive: boolean;
@@ -92,6 +100,48 @@ interface IncidenciaListadoSqlRow {
   responsableNombre: string | null;
   estado: EstadoIncidencia;
 }
+
+interface IncidenciaMiaSqlRow {
+  id: string;
+  codigo: string;
+  categoria: Categoria;
+  createdAt: Date;
+  estado: EstadoIncidencia;
+}
+
+interface ActorDetalleSqlRow {
+  isActive: boolean;
+  rol: IncidenciaUserRole;
+}
+
+interface IncidenciaDetalleAccesoSqlRow {
+  residenteId: string;
+  responsableId: string | null;
+}
+
+interface IncidenciaDetalleSqlRow {
+  id: string;
+  codigo: string;
+  categoria: Categoria;
+  descripcion: string;
+  lugar: string | null;
+  estado: EstadoIncidencia;
+  prioridad: Prioridad | null;
+  responsableId: string | null;
+  responsableNombre: string | null;
+}
+
+interface HistorialIncidenciaSqlRow {
+  campo: CampoHistorial;
+  valorAnterior: string | null;
+  valorNuevo: string;
+  actorNombre: string;
+  createdAt: Date;
+}
+
+export type IncidenciaDetalleRecord = Omit<IncidenciaDetalleEntity, 'lugar'> & {
+  readonly lugar: string | null;
+};
 
 export interface IncidenciaAsignacionBloqueada extends IncidenciaAsignacionActual {
   id: string;
@@ -223,6 +273,198 @@ export class IncidenciasRepository {
       LIMIT 1
     `;
     return evidencia ?? null;
+  }
+
+  /** Autoriza y proyecta el detalle dentro del mismo snapshot de lectura. */
+  async leerDetalle(
+    usuarioId: string,
+    incidenciaId: string,
+    autorizar: (
+      actor: ActorIncidenciaLectura,
+      alcance: AlcanceIncidenciaLectura,
+    ) => boolean,
+  ): Promise<IncidenciaDetalleRecord | null> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [actorRow] = await tx.$queryRaw<ActorDetalleSqlRow[]>`
+          SELECT "is_active" AS "isActive", "rol"::text AS "rol"
+          FROM "users"
+          WHERE "id" = ${usuarioId}::uuid
+          LIMIT 1
+        `;
+        if (!actorRow || !actorRow.isActive) {
+          throw new UsuarioIncidenciaNoDisponibleError();
+        }
+
+        const [alcance] = await tx.$queryRaw<
+          IncidenciaDetalleAccesoSqlRow[]
+        >`
+          SELECT
+            "residente_id"::text AS "residenteId",
+            "responsable_id"::text AS "responsableId"
+          FROM "incidencias"
+          WHERE "id" = ${incidenciaId}::uuid
+          LIMIT 1
+        `;
+        if (!alcance) return null;
+
+        const actor: ActorIncidenciaLectura = {
+          id: usuarioId,
+          rol: actorRow.rol,
+        };
+        if (!autorizar(actor, alcance)) return null;
+
+        const [incidencia] = await tx.$queryRaw<IncidenciaDetalleSqlRow[]>`
+          SELECT
+            i."id"::text AS "id",
+            i."codigo" AS "codigo",
+            i."categoria"::text AS "categoria",
+            i."descripcion" AS "descripcion",
+            CASE i."lugar_tipo"::text
+              WHEN 'UNIDAD' THEN u."codigo"
+              WHEN 'AREA_COMUN' THEN a."nombre"
+              ELSE NULL
+            END AS "lugar",
+            i."estado"::text AS "estado",
+            i."prioridad"::text AS "prioridad",
+            r."id"::text AS "responsableId",
+            r."nombre" AS "responsableNombre"
+          FROM "incidencias" AS i
+          LEFT JOIN "Unidad" AS u
+            ON i."lugar_tipo" = 'UNIDAD'::"LugarTipo"
+            AND u."id" = i."unidad_id"
+          LEFT JOIN "AreaComun" AS a
+            ON i."lugar_tipo" = 'AREA_COMUN'::"LugarTipo"
+            AND a."id" = i."area_id"
+          LEFT JOIN "users" AS r
+            ON r."id" = i."responsable_id"
+          WHERE i."id" = ${incidenciaId}::uuid
+          LIMIT 1
+        `;
+        if (!incidencia) return null;
+        if (
+          incidencia.responsableId !== null &&
+          incidencia.responsableNombre === null
+        ) {
+          throw new Error(
+            `La incidencia ${incidencia.id} tiene un responsable inconsistente.`,
+          );
+        }
+
+        const evidencias = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT "id"::text AS "id"
+          FROM "evidencias_incidencia"
+          WHERE "incidencia_id" = ${incidenciaId}::uuid
+          ORDER BY "created_at" ASC, "id" ASC
+        `;
+        const historial = await tx.$queryRaw<HistorialIncidenciaSqlRow[]>`
+          SELECT
+            h."campo"::text AS "campo",
+            h."valor_anterior" AS "valorAnterior",
+            h."valor_nuevo" AS "valorNuevo",
+            u."nombre" AS "actorNombre",
+            h."created_at" AS "createdAt"
+          FROM "historial_incidencia" AS h
+          INNER JOIN "users" AS u
+            ON u."id" = h."actor_id"
+          WHERE h."incidencia_id" = ${incidenciaId}::uuid
+          ORDER BY h."created_at" DESC, h."id" DESC
+        `;
+
+        return {
+          id: incidencia.id,
+          codigo: incidencia.codigo,
+          categoria: incidencia.categoria,
+          descripcion: incidencia.descripcion,
+          lugar: incidencia.lugar,
+          estado: incidencia.estado,
+          prioridad: incidencia.prioridad,
+          responsable:
+            incidencia.responsableId === null
+              ? null
+              : {
+                  id: incidencia.responsableId,
+                  nombre: incidencia.responsableNombre as string,
+                },
+          evidencias,
+          historial: historial.map((entrada) => ({
+            campo: entrada.campo,
+            valorAnterior: entrada.valorAnterior,
+            valorNuevo: entrada.valorNuevo,
+            actor: { nombre: entrada.actorNombre },
+            createdAt: entrada.createdAt,
+          })),
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  /** Lista propia y conteo comparten filtro y snapshot de lectura. */
+  async listarMias(
+    residenteId: string,
+    query: ListarIncidenciasMiasDto,
+    offset: number,
+  ): Promise<{ datos: IncidenciaMiaEntity[]; total: number }> {
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isInteger(query.tamanoPagina) ||
+      query.tamanoPagina < 1 ||
+      query.tamanoPagina > 50
+    ) {
+      throw new Error('La paginación de incidencias propias no es válida.');
+    }
+
+    const where = this.whereListadoMias(residenteId, query);
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [conteo] = await tx.$queryRaw<Array<{ total: bigint }>>(
+          Prisma.sql`
+            SELECT COUNT(*) AS "total"
+            FROM "incidencias" AS i
+            ${where}
+          `,
+        );
+        if (!conteo) throw new Error('La consulta no devolvió el conteo propio.');
+
+        const total = Number(conteo.total);
+        if (!Number.isSafeInteger(total) || total < 0) {
+          throw new Error('El conteo de incidencias propias excede el entero seguro.');
+        }
+
+        const filas =
+          offset >= total
+            ? []
+            : await tx.$queryRaw<IncidenciaMiaSqlRow[]>(Prisma.sql`
+                SELECT
+                  i."id"::text AS "id",
+                  i."codigo" AS "codigo",
+                  i."categoria"::text AS "categoria",
+                  i."created_at" AS "createdAt",
+                  i."estado"::text AS "estado"
+                FROM "incidencias" AS i
+                ${where}
+                ORDER BY i."created_at" DESC, i."id" DESC
+                LIMIT ${query.tamanoPagina}
+                OFFSET ${offset}
+              `);
+
+        const datos = filas.map(
+          (fila): IncidenciaMiaEntity => ({
+            id: fila.id,
+            codigo: fila.codigo,
+            categoria: fila.categoria,
+            createdAt: fila.createdAt,
+            estado: fila.estado,
+          }),
+        );
+
+        return { datos, total };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
 
   /** Página y total usan el mismo filtro y snapshot de lectura. */
@@ -747,5 +989,17 @@ export class IncidenciasRepository {
     return condiciones.length > 0
       ? Prisma.sql`WHERE ${Prisma.join(condiciones, ' AND ')}`
       : Prisma.empty;
+  }
+
+  private whereListadoMias(
+    residenteId: string,
+    query: ListarIncidenciasMiasDto,
+  ): Prisma.Sql {
+    return query.estado === undefined
+      ? Prisma.sql`WHERE i."residente_id" = ${residenteId}::uuid`
+      : Prisma.sql`
+          WHERE i."residente_id" = ${residenteId}::uuid
+            AND i."estado" = ${query.estado}::"EstadoIncidencia"
+        `;
   }
 }
