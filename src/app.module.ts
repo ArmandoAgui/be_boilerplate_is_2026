@@ -15,6 +15,7 @@ import { validateEnv } from '@Config';
 import { IncidenciasModule } from '@Incidencias';
 import { PaquetesModule } from './paquetes/paquetes.module.js';
 import { AsambleasModule } from './asambleas/asambleas.module.js';
+import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AsambleasModule } from './asambleas/asambleas.module.js';
     AsambleasModule,
     UnidadesModule,
     PaquetesModule,
+    NotificacionesModule,
   ],
   providers: [
     {
