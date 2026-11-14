@@ -16,6 +16,10 @@ import type {
   IncidenciaAsignacionActual,
   PlanAsignacionIncidencia,
 } from '../services/asignacion-incidencia.rules.js';
+import type {
+  EstadoIncidenciaDestino,
+  TransicionEstadoIncidencia,
+} from '../services/estado-incidencia.rules.js';
 import {
   AreaIncidenciaInactivaError,
   AreaIncidenciaInexistenteError,
@@ -23,6 +27,7 @@ import {
   IncidenciaNoEncontradaError,
   LugarIncidenciaInvalidoError,
   RolIncidenciaNoAutorizadoError,
+  TransicionEstadoIncidenciaInvalidaError,
   UnidadIncidenciaAjenaError,
   UnidadIncidenciaInexistenteError,
   UsuarioIncidenciaNoDisponibleError,
@@ -120,6 +125,27 @@ export interface SesionAsignacionIncidencia {
   aplicarPlan(
     plan: PlanAsignacionIncidencia,
   ): Promise<AsignacionActualizadaRecord>;
+}
+
+export interface IncidenciaEstadoBloqueada {
+  readonly id: string;
+  readonly codigo: string;
+  readonly residenteId: string;
+  readonly estado: EstadoIncidencia;
+}
+
+export interface EstadoIncidenciaActualizadaRecord
+  extends IncidenciaEstadoBloqueada {
+  readonly estado: EstadoIncidenciaDestino;
+  readonly updatedAt: Date;
+}
+
+export interface SesionEstadoIncidencia {
+  readonly actual: IncidenciaEstadoBloqueada;
+  aplicarTransicion(
+    transicion: TransicionEstadoIncidencia,
+    actorId: string,
+  ): Promise<EstadoIncidenciaActualizadaRecord>;
 }
 
 interface IncidenciaInsertada {
@@ -474,6 +500,87 @@ export class IncidenciasRepository {
                       id: resultado.responsableId,
                       nombre: resultado.responsableNombre as string,
                     },
+            };
+          },
+        };
+
+        return operar(sesion);
+      },
+      { maxWait: 10_000, timeout: 15_000 },
+    );
+  }
+
+  /** Bloquea la incidencia y confirma su estado e historial en una unidad. */
+  async conBloqueoEstado<T>(
+    incidenciaId: string,
+    operar: (sesion: SesionEstadoIncidencia) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [actual] = await tx.$queryRaw<IncidenciaEstadoBloqueada[]>`
+          SELECT
+            "id"::text AS "id",
+            "codigo" AS "codigo",
+            "residente_id"::text AS "residenteId",
+            "estado"::text AS "estado"
+          FROM "incidencias"
+          WHERE "id" = ${incidenciaId}::uuid
+          FOR UPDATE
+        `;
+        if (!actual) {
+          throw new IncidenciaNoEncontradaError(
+            'La incidencia indicada no existe.',
+          );
+        }
+
+        const sesion: SesionEstadoIncidencia = {
+          actual,
+          aplicarTransicion: async (transicion, actorId) => {
+            const [reloj] = await tx.$queryRaw<Array<{ ahora: Date }>>`
+              SELECT clock_timestamp()::timestamptz(3) AS "ahora"
+            `;
+            if (!reloj) {
+              throw new Error('No se obtuvo la fecha de la transición.');
+            }
+
+            const actualizadas = await tx.$executeRaw`
+              UPDATE "incidencias"
+              SET
+                "estado" = ${transicion.estadoDestino}::"EstadoIncidencia",
+                "updated_at" = ${reloj.ahora}
+              WHERE "id" = ${incidenciaId}::uuid
+                AND "estado" = ${transicion.estadoEsperado}::"EstadoIncidencia"
+            `;
+            if (actualizadas !== 1) {
+              throw new TransicionEstadoIncidenciaInvalidaError(
+                'El estado cambió antes de guardar la transición.',
+              );
+            }
+
+            const insertadas = await tx.$executeRaw`
+              INSERT INTO "historial_incidencia" (
+                "id", "incidencia_id", "campo", "valor_anterior",
+                "valor_nuevo", "actor_id", "created_at"
+              ) VALUES (
+                ${randomUUID()}::uuid,
+                ${incidenciaId}::uuid,
+                'ESTADO'::"CampoHistorial",
+                ${transicion.estadoEsperado},
+                ${transicion.estadoDestino},
+                ${actorId}::uuid,
+                ${reloj.ahora}
+              )
+            `;
+            if (insertadas !== 1) {
+              throw new Error(
+                'No se insertó exactamente una entrada de historial de estado.',
+              );
+            }
+
+            return {
+              ...actual,
+              estado: transicion.estadoDestino,
+              updatedAt: reloj.ahora,
             };
           },
         };
