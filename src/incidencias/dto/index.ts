@@ -1,5 +1,7 @@
 export * from './actualizar-asignacion.dto.js';
+export * from './actualizar-estado-incidencia.dto.js';
 export * from './asignacion-actualizada.dto.js';
+export * from './estado-incidencia-actualizado.dto.js';
 export * from './crear-incidencia.dto.js';
 export * from './evidencia-incidencia.dto.js';
 export * from './incidencia-creada.dto.js';

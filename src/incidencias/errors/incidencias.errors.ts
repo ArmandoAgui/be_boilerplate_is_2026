@@ -15,7 +15,10 @@ export type IncidenciaDomainErrorCode =
   | 'INCIDENCIA_NO_ENCONTRADA'
   | 'INCIDENCIA_RESUELTA'
   | 'ASIGNACION_VACIA'
-  | 'PRIORIDAD_NO_VALIDA';
+  | 'PRIORIDAD_NO_VALIDA'
+  | 'ESTADO_DESTINO_NO_VALIDO'
+  | 'TRANSICION_ESTADO_INVALIDA'
+  | 'NOTIFICACIONES_NO_DISPONIBLES';
 
 export class IncidenciaDomainError extends Error {
   constructor(
@@ -113,8 +116,33 @@ export class ResponsableIncidenciaNoValidoError extends IncidenciaDomainError {
 }
 
 export class IncidenciaNoEncontradaError extends IncidenciaDomainError {
+  constructor(message = 'La incidencia solicitada no existe.') {
+    super('INCIDENCIA_NO_ENCONTRADA', message);
+  }
+}
+
+export class EstadoIncidenciaDestinoInvalidoError extends IncidenciaDomainError {
   constructor() {
-    super('INCIDENCIA_NO_ENCONTRADA', 'La incidencia solicitada no existe.');
+    super(
+      'ESTADO_DESTINO_NO_VALIDO',
+      'El estado debe ser EN_PROCESO o RESUELTA.',
+      'estado',
+    );
+  }
+}
+
+export class TransicionEstadoIncidenciaInvalidaError extends IncidenciaDomainError {
+  constructor(message: string) {
+    super('TRANSICION_ESTADO_INVALIDA', message, 'estado');
+  }
+}
+
+export class NotificacionesH28NoDisponiblesError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'NOTIFICACIONES_NO_DISPONIBLES',
+      'No se pudo completar la operación. Intente de nuevo.',
+    );
   }
 }
 
@@ -165,6 +193,12 @@ const HTTP_ERROR_BY_CODE: Record<
   INCIDENCIA_RESUELTA: { status: 409, error: 'Conflict' },
   ASIGNACION_VACIA: { status: 400, error: 'Bad Request' },
   PRIORIDAD_NO_VALIDA: { status: 400, error: 'Bad Request' },
+  ESTADO_DESTINO_NO_VALIDO: { status: 400, error: 'Bad Request' },
+  TRANSICION_ESTADO_INVALIDA: { status: 409, error: 'Conflict' },
+  NOTIFICACIONES_NO_DISPONIBLES: {
+    status: 500,
+    error: 'Internal Server Error',
+  },
 };
 
 /** Traduce solo errores de dominio conocidos; los demás siguen su manejo normal. */

@@ -8,5 +8,6 @@ export * from './interceptors/index.js';
 export * from './pipes/index.js';
 export * from './repositories/index.js';
 export * from './services/index.js';
+export * from './notificaciones/index.js';
 export * from './storage/index.js';
 export * from './validators/index.js';

@@ -41,7 +41,9 @@ import {
   LUGARES_INCIDENCIA,
 } from '../dto/crear-incidencia.dto.js';
 import { ActualizarAsignacionDto } from '../dto/actualizar-asignacion.dto.js';
+import { ActualizarEstadoIncidenciaDto } from '../dto/actualizar-estado-incidencia.dto.js';
 import { AsignacionActualizadaDto } from '../dto/asignacion-actualizada.dto.js';
+import { EstadoIncidenciaActualizadoDto } from '../dto/estado-incidencia-actualizado.dto.js';
 import { IncidenciaCreadaDto } from '../dto/incidencia-creada.dto.js';
 import { IncidenciaErrorDto } from '../dto/incidencia-error.dto.js';
 import { IncidenciaIdParamsDto } from '../dto/incidencia-id-params.dto.js';
@@ -54,6 +56,7 @@ import { AdministradorIncidenciasGuard } from '../guards/administrador-incidenci
 import { ResidenteIncidenciasGuard } from '../guards/residente-incidencias.guard.js';
 import { FotosIncidenciaInterceptor } from '../interceptors/fotos-incidencia.interceptor.js';
 import { ActualizarAsignacionBodyPipe } from '../pipes/actualizar-asignacion-body.pipe.js';
+import { ActualizarEstadoIncidenciaBodyPipe } from '../pipes/actualizar-estado-incidencia-body.pipe.js';
 import { IncidenciasService } from '../services/incidencias.service.js';
 
 const PAGINA_MAXIMA_SEGURA = Math.floor(Number.MAX_SAFE_INTEGER / 50) + 1;
@@ -242,6 +245,68 @@ export class IncidenciasController {
       usuario.id,
       params.id,
       cuerpo as ActualizarAsignacionDto,
+    );
+  }
+
+  @Patch(':id/estado')
+  @UseGuards(AdministradorIncidenciasGuard)
+  @ApiOperation({
+    summary: 'Actualizar el estado de una incidencia',
+    description:
+      'H11 permite únicamente ASIGNADA → EN_PROCESO y EN_PROCESO → RESUELTA. Cada transición se confirma con una sola entrada ESTADO en el historial. La resolución requiere el proveedor H28; mientras no esté integrado, la solicitud no modifica la incidencia.',
+  })
+  @ApiParam({
+    name: 'id',
+    format: 'uuid',
+    description: 'UUID de la incidencia cuyo estado se va a actualizar.',
+  })
+  @ApiBody({
+    type: ActualizarEstadoIncidenciaDto,
+    required: true,
+    description:
+      'Objeto JSON con la propiedad estado, cuyo valor debe ser exactamente EN_PROCESO o RESUELTA. No se permiten otras propiedades.',
+  })
+  @ApiOkResponse({
+    description:
+      'Estado e historial confirmados; al resolver, H28 terminó correctamente.',
+    type: EstadoIncidenciaActualizadoDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'UUID de ruta inválido o body ausente, no objeto, inválido, con estado no admitido o propiedades extra.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer ausente, inválido o expirado; cuenta inactiva.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiForbiddenResponse({
+    description: 'Solo un administrador puede actualizar estados.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'La incidencia indicada no existe.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiConflictResponse({
+    description:
+      'La transición no está permitida desde el estado actual o ya fue aplicada.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description:
+      'Error interno. Si H28 aún no está integrado, la resolución se rechaza antes de modificar la incidencia; si falla después de un commit con H28 presente, el estado puede haber quedado RESUELTA.',
+    type: IncidenciaErrorDto,
+  })
+  async actualizarEstado(
+    @Param() params: IncidenciaIdParamsDto,
+    @Body(ActualizarEstadoIncidenciaBodyPipe) cuerpo: unknown,
+    @CurrentUser() usuario: User,
+  ): Promise<EstadoIncidenciaActualizadoDto> {
+    return this.incidenciasService.actualizarEstado(
+      usuario.id,
+      params.id,
+      cuerpo as ActualizarEstadoIncidenciaDto,
     );
   }
 

@@ -7,6 +7,7 @@ import { EvidenciasStorage } from './storage/evidencias.storage.js';
 import { AdministradorIncidenciasGuard } from './guards/administrador-incidencias.guard.js';
 import { ResidenteIncidenciasGuard } from './guards/residente-incidencias.guard.js';
 import { ActualizarAsignacionBodyPipe } from './pipes/actualizar-asignacion-body.pipe.js';
+import { ActualizarEstadoIncidenciaBodyPipe } from './pipes/actualizar-estado-incidencia-body.pipe.js';
 
 @Module({
   controllers: [IncidenciasController],
@@ -18,6 +19,7 @@ import { ActualizarAsignacionBodyPipe } from './pipes/actualizar-asignacion-body
     AdministradorIncidenciasGuard,
     ResidenteIncidenciasGuard,
     ActualizarAsignacionBodyPipe,
+    ActualizarEstadoIncidenciaBodyPipe,
   ],
 })
 export class IncidenciasModule {}

@@ -17,6 +17,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Autenticación](#autenticación)
 - [Endpoints](#endpoints)
 - [H9: Reportar una incidencia](#h9-reportar-una-incidencia)
+- [H11: Actualizar el estado de una incidencia](#h11-actualizar-el-estado-de-una-incidencia)
 - [H27: Consultar avisos](#h27-consultar-avisos)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
@@ -554,3 +555,7 @@ El backend permite a un residente activo reportar una incidencia en una unidad v
 ## H27: Consultar avisos
 
 Un Residente activo puede consultar su bandeja paginada y marcar sus propios avisos como leídos. El contador incluye todas sus notificaciones no leídas, aunque la lista esté filtrada. Los permisos, filtros, ejemplos de respuesta, decisiones de privacidad y el contrato de datos para H28 están en [docs/H27-consultar-avisos.md](docs/H27-consultar-avisos.md).
+
+## H11: Actualizar el estado de una incidencia
+
+El endpoint administrativo y la matriz de transiciones están documentados en [docs/H11-actualizar-estado-incidencia.md](docs/H11-actualizar-estado-incidencia.md). La transición a `RESUELTA` espera la integración del provider compartido H27/H28; mientras tanto, la solicitud falla sin modificar la incidencia.

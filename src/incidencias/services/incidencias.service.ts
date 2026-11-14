@@ -1,13 +1,18 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { isUUID } from 'class-validator';
+import { EstadoIncidencia } from '@PrismaClient';
 import type { ReadStream } from 'node:fs';
 import type { CrearIncidenciaDto } from '../dto/crear-incidencia.dto.js';
 import { IncidenciaCreadaDto } from '../dto/incidencia-creada.dto.js';
+import type { ActualizarEstadoIncidenciaDto } from '../dto/actualizar-estado-incidencia.dto.js';
+import { EstadoIncidenciaActualizadoDto } from '../dto/estado-incidencia-actualizado.dto.js';
 import type { ListarIncidenciasDto } from '../dto/listar-incidencias.dto.js';
 import type { ListadoIncidenciasDto } from '../dto/incidencia-listado.dto.js';
 import type { ListarResponsablesDto } from '../dto/listar-responsables.dto.js';
@@ -25,12 +30,19 @@ import {
   AdministradorIncidenciasRequeridoError,
   IncidenciaResueltaError,
   IncidenciaEvidenciaNoEncontradaError,
+  NotificacionesH28NoDisponiblesError,
   ResponsableIncidenciaNoValidoError,
   SolicitudAsignacionVaciaError,
   UsuarioIncidenciaNoDisponibleError,
 } from '../errors/incidencias.errors.js';
 import { IncidenciaLugarService } from './incidencia-lugar.service.js';
 import { calcularPlanAsignacion } from './asignacion-incidencia.rules.js';
+import { calcularTransicionEstadoIncidencia } from './estado-incidencia.rules.js';
+import { crearIncidenciaResueltaPayload } from '../notificaciones/incidencia-resuelta.payload.js';
+import {
+  H28_NOTIFICACIONES_PORT,
+  type H28NotificacionesPort,
+} from '../notificaciones/h28-notificaciones.port.js';
 
 export interface EvidenciaPrivadaLectura {
   readonly stream: ReadStream;
@@ -45,6 +57,9 @@ export class IncidenciasService {
     private readonly incidenciasRepository: IncidenciasRepository,
     private readonly incidenciaLugarService: IncidenciaLugarService,
     private readonly evidenciasStorage: EvidenciasStorage,
+    @Optional()
+    @Inject(H28_NOTIFICACIONES_PORT)
+    private readonly notificacionesH28?: H28NotificacionesPort,
   ) {}
 
   /** Revalida identidad/rol para que los métodos internos no dependan del guard. */
@@ -155,6 +170,73 @@ export class IncidenciasService {
         return sesion.aplicarPlan(plan);
       },
     );
+  }
+
+  async actualizarEstado(
+    administradorId: string,
+    incidenciaId: string,
+    solicitud: ActualizarEstadoIncidenciaDto,
+  ): Promise<EstadoIncidenciaActualizadoDto> {
+    await this.verificarAdministradorActivo(administradorId);
+
+    if (!isUUID(incidenciaId)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'id debe ser un UUID válido.',
+        campo: 'id',
+      });
+    }
+
+    const actualizada = await this.incidenciasRepository.conBloqueoEstado(
+      incidenciaId,
+      async (sesion) => {
+        const transicion = calcularTransicionEstadoIncidencia(
+          sesion.actual.estado,
+          solicitud.estado,
+        );
+
+        // Mantiene RESUELTA sin cambios mientras H28 aún no esté integrado;
+        // no se confirma una resolución que no pueda emitir su aviso.
+        if (
+          transicion.estadoDestino === EstadoIncidencia.RESUELTA &&
+          !this.notificacionesH28
+        ) {
+          throw new NotificacionesH28NoDisponiblesError();
+        }
+
+        return sesion.aplicarTransicion(transicion, administradorId);
+      },
+    );
+
+    if (actualizada.estado === EstadoIncidencia.RESUELTA) {
+      const payload = crearIncidenciaResueltaPayload(actualizada);
+      try {
+        const resultado = await this.notificacionesH28!.crear(payload);
+        if (
+          !resultado ||
+          !Number.isSafeInteger(resultado.creadas) ||
+          resultado.creadas < 0
+        ) {
+          throw new Error('H28 devolvió un resultado de creación inválido.');
+        }
+      } catch (error) {
+        this.logger.error(
+          JSON.stringify({
+            evento: 'H11_H28_AVISO_FALLIDO_TRAS_COMMIT',
+            incidenciaId: actualizada.id,
+            claveEvento: payload.claveEvento,
+            residenteId: payload.destinatario.id,
+            estadoConfirmado: actualizada.estado,
+            fechaConfirmacion: actualizada.updatedAt.toISOString(),
+          }),
+          error instanceof Error ? error.stack : undefined,
+        );
+        throw error;
+      }
+    }
+
+    return EstadoIncidenciaActualizadoDto.fromEntity(actualizada);
   }
 
   async crear(
