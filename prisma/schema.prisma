@@ -57,6 +57,7 @@ model User {
   lecturasComunicado  LecturaComunicado[]
   notificaciones     Notificacion[]
   preferenciaDirectorio PreferenciaDirectorio?
+  pagos                 Pago[]
 
   @@map("users")
 }
@@ -236,9 +237,39 @@ model Cuota {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   unidad           Unidad      @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  pagos            Pago[]
 
   @@unique([unidadId, periodo, concepto])
   @@index([unidadId, estado])
+}
+
+enum EstadoPago {
+  PROCESANDO
+  APROBADO
+  RECHAZADO
+}
+
+// H2: un intento de pago con la pasarela simulada. Nunca guarda el número
+// completo de la tarjeta ni el código de seguridad: solo los últimos 4 dígitos.
+model Pago {
+  id             String     @id @default(uuid()) @db.Uuid
+  // Correlativo que alimenta la referencia PAG-AAAAMMDD-000001.
+  numero         Int        @unique @default(autoincrement())
+  referencia     String     @unique @db.VarChar(20)
+  cuotaId        String     @db.Uuid
+  userId         String     @db.Uuid
+  monto          Decimal    @db.Decimal(10, 2)
+  ultimos4       String     @db.Char(4)
+  idempotencyKey String     @unique @db.Uuid
+  estado         EstadoPago @default(PROCESANDO)
+  motivoRechazo  String?    @db.VarChar(100)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  cuota          Cuota      @relation(fields: [cuotaId], references: [id], onDelete: Restrict)
+  user           User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([cuotaId])
+  @@index([userId])
 }
 
 enum LugarTipo {
