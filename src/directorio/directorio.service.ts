@@ -10,9 +10,23 @@ const APAGADAS: PreferenciasDirectorioDto = {
   mostrarUnidad: false,
 };
 
+const normalizar = (s: string) =>
+  s.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es');
+
+function proyectar(f: FilaDirectorio) {
+  const p = f.preferenciaDirectorio;
+  return {
+    id: f.id,
+    nombre: f.nombre,
+    telefono: p?.mostrarTelefono ? (f.telefono ?? null) : null,
+    correo: p?.mostrarCorreo ? f.email : null,
+    unidad: p?.mostrarUnidad ? f.unidades.map((u) => u.unidad.codigo).join(', ') || null : null,
+  };
+}
+
 @Injectable()
 export class DirectorioService {
-  constructor(private readonly repo: DirectorioRepository) { }
+  constructor(private readonly repo: DirectorioRepository) {}
   private permitir(user: User) {
     if (user.rol !== 'RESIDENTE')
       throw new ForbiddenException('No tienes permiso para realizar esta operación');
@@ -27,29 +41,14 @@ export class DirectorioService {
   async guardar(user: User, dto: PreferenciasDirectorioDto): Promise<PreferenciasDirectorioDto> {
     this.permitir(user);
     const datos = dto.visible ? dto : APAGADAS;
-    // Sin mayúsculas ni acentos.
-    const normalizar = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es');
-
-    // Única puerta de salida: solo se publica lo que el vecino autorizó.
-    function proyectar(f: FilaDirectorio) {
-      const p = f.preferenciaDirectorio;
-      return {
-        id: f.id,
-        nombre: f.nombre,
-        telefono: p?.mostrarTelefono ? (f.telefono ?? null) : null,
-        correo: p?.mostrarCorreo ? f.email : null,
-        unidad: p?.mostrarUnidad ? f.unidades.map((u) => u.unidad.codigo).join(', ') || null : null,
-      };
-    }
     return this.repo.guardar(user.id, {
       visible: datos.visible,
       mostrarTelefono: datos.mostrarTelefono,
       mostrarCorreo: datos.mostrarCorreo,
       mostrarUnidad: datos.mostrarUnidad,
     });
-
   }
-    async buscar(user: User, dto: BuscarDirectorioDto) {
+  async buscar(user: User, dto: BuscarDirectorioDto) {
     this.permitir(user);
     const termino = normalizar(dto.buscar);
     const filas = await this.repo.visibles();
@@ -84,5 +83,4 @@ export class DirectorioService {
     if (!fila) throw new NotFoundException('Perfil inexistente u oculto');
     return proyectar(fila);
   }
-
 }
