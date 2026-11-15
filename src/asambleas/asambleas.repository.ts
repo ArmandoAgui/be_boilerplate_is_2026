@@ -98,6 +98,34 @@ export class AsambleasRepository {
       select: { id: true, createdAt: true },
     });
   }
+    // H22: conteo por opción. Solo lee Voto (no tiene unidad ni usuario).
+  votosPorOpcion(temaId: string) {
+    return this.prisma.voto.groupBy({
+      by: ['opcionId'],
+      where: { temaId },
+      _count: { _all: true },
+    });
+  }
+  // H22: evidencia. Solo lee ParticipacionVoto (no tiene opción).
+  participaciones(temaId: string) {
+    return this.prisma.participacionVoto.findMany({
+      where: { temaId },
+      select: {
+        createdAt: true,
+        unidad: { select: { id: true, codigo: true } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { unidad: { codigo: 'asc' } }],
+    });
+  }
+  // H22: unidades activas con al menos un residente activo.
+  unidadesHabilitadas() {
+    return this.prisma.unidad.count({
+      where: {
+        activa: true,
+        usuarios: { some: { user: { isActive: true, rol: 'RESIDENTE' } } },
+      },
+    });
+  }
   async votar(temaId: string, unidadId: string, opcionId: string) {
     return this.prisma.$transaction(
       async (tx) => {
