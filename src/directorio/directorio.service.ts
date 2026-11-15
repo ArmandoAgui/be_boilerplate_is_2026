@@ -1,7 +1,7 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { User } from '@PrismaClient';
-import { DirectorioRepository } from './directorio.repository.js';
-import type { PreferenciasDirectorioDto } from './directorio.dto.js';
+import { DirectorioRepository, type FilaDirectorio } from './directorio.repository.js';
+import type { BuscarDirectorioDto, PreferenciasDirectorioDto } from './directorio.dto.js';
 
 const APAGADAS: PreferenciasDirectorioDto = {
   visible: false,
@@ -9,6 +9,20 @@ const APAGADAS: PreferenciasDirectorioDto = {
   mostrarCorreo: false,
   mostrarUnidad: false,
 };
+
+const normalizar = (s: string) =>
+  s.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es');
+
+function proyectar(f: FilaDirectorio) {
+  const p = f.preferenciaDirectorio;
+  return {
+    id: f.id,
+    nombre: f.nombre,
+    telefono: p?.mostrarTelefono ? (f.telefono ?? null) : null,
+    correo: p?.mostrarCorreo ? f.email : null,
+    unidad: p?.mostrarUnidad ? f.unidades.map((u) => u.unidad.codigo).join(', ') || null : null,
+  };
+}
 
 @Injectable()
 export class DirectorioService {
@@ -33,5 +47,40 @@ export class DirectorioService {
       mostrarCorreo: datos.mostrarCorreo,
       mostrarUnidad: datos.mostrarUnidad,
     });
+  }
+  async buscar(user: User, dto: BuscarDirectorioDto) {
+    this.permitir(user);
+    const termino = normalizar(dto.buscar);
+    const filas = await this.repo.visibles();
+    const coinciden = filas
+      .filter(
+        (f) =>
+          normalizar(f.nombre).includes(termino) ||
+          // Unidad y torre solo cuentan si el vecino autorizó mostrar su unidad.
+          (f.preferenciaDirectorio?.mostrarUnidad === true &&
+            f.unidades.some(
+              (u) =>
+                normalizar(u.unidad.codigo).includes(termino) ||
+                normalizar(u.unidad.torre.nombre).includes(termino),
+            )),
+      )
+      .sort(
+        (a, b) =>
+          a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }) ||
+          a.id.localeCompare(b.id),
+      );
+    const { pagina, tamanoPagina } = dto;
+    return {
+      datos: coinciden.slice((pagina - 1) * tamanoPagina, pagina * tamanoPagina).map(proyectar),
+      total: coinciden.length,
+      pagina,
+      tamanoPagina,
+    };
+  }
+  async ficha(user: User, id: string) {
+    this.permitir(user);
+    const fila = await this.repo.visible(id);
+    if (!fila) throw new NotFoundException('Perfil inexistente u oculto');
+    return proyectar(fila);
   }
 }
