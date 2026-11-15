@@ -17,6 +17,7 @@ import { PaquetesModule } from './paquetes/paquetes.module.js';
 import { AsambleasModule } from './asambleas/asambleas.module.js';
 import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
 import { ScheduleModule } from '@nestjs/schedule';
+import { DirectorioModule } from './directorio/directorio.module.js';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     UnidadesModule,
     PaquetesModule,
     NotificacionesModule,
+    DirectorioModule,
   ],
   providers: [
     {

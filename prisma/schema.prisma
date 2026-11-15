@@ -44,22 +44,19 @@ model User {
   unidades            UsuarioUnidad[]
   reservas             Reserva[]
   autorizaciones       AutorizacionVisita[]
-  // H14: registra quién controló ingreso y salida.
   ingresosRegistrados  MovimientoVisita[] @relation("IngresosRegistrados")
   salidasRegistradas   MovimientoVisita[] @relation("SalidasRegistradas")
   refreshTokens        RefreshToken[]
-  // H9: conserva autor, responsable e historial de incidencias.
   incidenciasCreadas   Incidencia[]        @relation("ResidenteIncidencias")
   incidenciasAsignadas Incidencia[]        @relation("ResponsableIncidencias")
   historialIncidencias HistorialIncidencia[] @relation("ActorHistorialIncidencia")
-  // H16: conservar las dos relaciones nombradas del modelo compartido Paquete.
   paquetesRegistrados Paquete[] @relation("PaquetesRegistrados")
   paquetesEntregados  Paquete[] @relation("PaquetesEntregados")
-  // H20: asambleas creadas por el administrador.
   asambleasCreadas    Asamblea[]
   comunicadosCreados  Comunicado[]
   lecturasComunicado  LecturaComunicado[]
   notificaciones     Notificacion[]
+  preferenciaDirectorio PreferenciaDirectorio?
 
   @@map("users")
 }
@@ -554,4 +551,16 @@ model Notificacion {
   @@unique([userId, claveEvento])
   @@index([userId, createdAt])
   @@map("notificaciones")
+}
+model PreferenciaDirectorio {
+  userId          String   @id @db.Uuid
+  visible         Boolean  @default(false)
+  mostrarTelefono Boolean  @default(false)
+  mostrarCorreo   Boolean  @default(false)
+  mostrarUnidad   Boolean  @default(false)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("preferencias_directorio")
 }
