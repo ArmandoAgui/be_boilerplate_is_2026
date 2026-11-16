@@ -1,0 +1,11 @@
+[Unit]
+Description=Respaldo diario SONNET 5 a las 03:00 de El Salvador
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/El_Salvador
+Persistent=true
+RandomizedDelaySec=120
+Unit=sonnet5-backup.service
+
+[Install]
+WantedBy=timers.target
