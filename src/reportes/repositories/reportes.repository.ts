@@ -18,7 +18,7 @@ export class ReportesRepository {
   /** Cuotas que vencieron dentro del período y antes de hoy, pagadas o no. */
   cuotasVencidasEnPeriodo(desde: Date, hasta: Date, hoy: Date) {
     return this.prisma.cuota.count({
-      where: { fechaVencimiento: { gte: desde, lte: hasta, lt: hoy } },
+      where: { fechaVencimiento: { gte: desde, lte: hasta, lt: hoy }, estado: { not: 'ANULADA' }, unidad: { activa: true } },
     });
   }
 

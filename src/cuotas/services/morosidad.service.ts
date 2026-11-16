@@ -36,6 +36,7 @@ export class MorosidadService {
       ? {
           AND: [
             vencidas,
+            { unidad: { activa: true } },
             {
               fechaVencimiento: {
                 gte: vencimiento.desde,
