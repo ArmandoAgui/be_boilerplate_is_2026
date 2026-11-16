@@ -1,4 +1,5 @@
 export * from './asignacion-incidencia.rules.js';
 export * from './estado-incidencia.rules.js';
+export * from './incidencias-lectura.rules.js';
 export * from './incidencia-lugar.service.js';
 export * from './incidencias.service.js';

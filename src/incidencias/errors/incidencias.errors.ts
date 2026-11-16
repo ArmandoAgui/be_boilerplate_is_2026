@@ -13,6 +13,7 @@ export type IncidenciaDomainErrorCode =
   | 'ADMINISTRADOR_REQUERIDO'
   | 'RESPONSABLE_NO_VALIDO'
   | 'INCIDENCIA_NO_ENCONTRADA'
+  | 'INCIDENCIA_DETALLE_NO_ENCONTRADA'
   | 'INCIDENCIA_RESUELTA'
   | 'ASIGNACION_VACIA'
   | 'PRIORIDAD_NO_VALIDA'
@@ -83,8 +84,10 @@ export class UsuarioIncidenciaNoDisponibleError extends IncidenciaDomainError {
 }
 
 export class RolIncidenciaNoAutorizadoError extends IncidenciaDomainError {
-  constructor() {
-    super('ROL_NO_AUTORIZADO', 'Solo un residente puede reportar incidencias.');
+  constructor(
+    message = 'Solo un residente puede reportar incidencias.',
+  ) {
+    super('ROL_NO_AUTORIZADO', message);
   }
 }
 
@@ -157,6 +160,15 @@ export class NotificacionesH28FallidasError extends IncidenciaDomainError {
   }
 }
 
+export class IncidenciaDetalleNoEncontradaError extends IncidenciaDomainError {
+  constructor() {
+    super(
+      'INCIDENCIA_DETALLE_NO_ENCONTRADA',
+      'Incidencia no encontrada.',
+    );
+  }
+}
+
 export class IncidenciaResueltaError extends IncidenciaDomainError {
   constructor() {
     super(
@@ -201,6 +213,7 @@ const HTTP_ERROR_BY_CODE: Record<
   ADMINISTRADOR_REQUERIDO: { status: 403, error: 'Forbidden' },
   RESPONSABLE_NO_VALIDO: { status: 400, error: 'Bad Request' },
   INCIDENCIA_NO_ENCONTRADA: { status: 404, error: 'Not Found' },
+  INCIDENCIA_DETALLE_NO_ENCONTRADA: { status: 404, error: 'Not Found' },
   INCIDENCIA_RESUELTA: { status: 409, error: 'Conflict' },
   ASIGNACION_VACIA: { status: 400, error: 'Bad Request' },
   PRIORIDAD_NO_VALIDA: { status: 400, error: 'Bad Request' },

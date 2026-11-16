@@ -47,6 +47,11 @@ export class IncidenciasHttpFilter implements ExceptionFilter {
   private readonly logger = new Logger(IncidenciasHttpFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
+    host
+      .switchToHttp()
+      .getResponse<Response>()
+      .setHeader('Cache-Control', 'private, no-store');
+
     const normalized =
       incidenciaDomainErrorToHttpException(exception) ?? exception;
     const httpError = this.toMulterHttpError(normalized);

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -47,9 +48,12 @@ import { EstadoIncidenciaActualizadoDto } from '../dto/estado-incidencia-actuali
 import { IncidenciaCreadaDto } from '../dto/incidencia-creada.dto.js';
 import { IncidenciaErrorDto } from '../dto/incidencia-error.dto.js';
 import { IncidenciaIdParamsDto } from '../dto/incidencia-id-params.dto.js';
+import { IncidenciaDetalleDto } from '../dto/incidencia-detalle.dto.js';
 import { ListarIncidenciasDto } from '../dto/listar-incidencias.dto.js';
+import { ListarIncidenciasMiasDto } from '../dto/listar-incidencias-mias.dto.js';
 import { ListarResponsablesDto } from '../dto/listar-responsables.dto.js';
 import { ListadoIncidenciasDto } from '../dto/incidencia-listado.dto.js';
+import { ListadoIncidenciasMiasDto } from '../dto/incidencias-mias.dto.js';
 import { ListadoResponsablesDto } from '../dto/responsable-incidencia.dto.js';
 import { IncidenciasHttpFilter } from '../filters/incidencias-http.filter.js';
 import { AdministradorIncidenciasGuard } from '../guards/administrador-incidencias.guard.js';
@@ -120,6 +124,64 @@ export class IncidenciasController {
       usuario.id,
       query,
     );
+  }
+
+  @Get('mias')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Listar mis incidencias',
+    description:
+      'Devuelve únicamente los reportes del Residente autenticado. El filtro estado es opcional; el orden es createdAt e id descendentes. La paginación se calcula en PostgreSQL y el total respeta el filtro.',
+  })
+  @ApiQuery({
+    name: 'estado',
+    required: false,
+    enum: EstadoIncidencia,
+    description: 'Filtro exacto por estado del reporte propio.',
+  })
+  @ApiQuery({
+    name: 'pagina',
+    required: false,
+    schema: {
+      type: 'integer',
+      minimum: 1,
+      maximum: PAGINA_MAXIMA_SEGURA,
+      default: 1,
+    },
+    description: 'Entero seguro de página, comenzando en 1.',
+  })
+  @ApiQuery({
+    name: 'tamanoPagina',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+    description: 'Cantidad de resultados por página.',
+  })
+  @ApiOkResponse({
+    description: 'Página de incidencias propias con total antes de paginar.',
+    type: ListadoIncidenciasMiasDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Estado fuera del enum, query no escalar/repetida/desconocida o paginación inválida.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer ausente, inválido o expirado; usuario inactivo.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiForbiddenResponse({
+    description: 'Solo un residente puede consultar sus incidencias.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'No se pudo completar la consulta de incidencias propias.',
+    type: IncidenciaErrorDto,
+  })
+  async listarMias(
+    @CurrentUser() usuario: User,
+    @Query() query: ListarIncidenciasMiasDto,
+  ): Promise<ListadoIncidenciasMiasDto> {
+    return this.incidenciasService.listarMias(usuario.id, usuario.rol, query);
   }
 
   @Get()
@@ -384,6 +446,42 @@ export class IncidenciasController {
     @UploadedFiles() fotos?: Express.Multer.File[],
   ): Promise<IncidenciaCreadaDto> {
     return this.incidenciasService.crear(usuario.id, dto, fotos);
+  }
+
+  @Get(':id')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Consultar el detalle privado de una incidencia',
+    description:
+      'Disponible para el residente autor, cualquier administrador y Seguridad asignada actualmente. Una incidencia inexistente o fuera del alcance devuelve el mismo 404. La respuesta incluye metadatos de evidencias con rutas H9 protegidas y el historial completo.',
+  })
+  @ApiParam({
+    name: 'id',
+    format: 'uuid',
+    description: 'UUID de la incidencia.',
+  })
+  @ApiOkResponse({
+    description: 'Detalle mínimo, evidencias privadas e historial ordenado.',
+    type: IncidenciaDetalleDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer ausente, inválido o expirado; usuario inactivo.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiNotFoundResponse({
+    description:
+      'UUID inválido, incidencia inexistente o actor sin alcance. La respuesta no distingue estos casos.',
+    type: IncidenciaErrorDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'No se pudo completar la consulta del detalle.',
+    type: IncidenciaErrorDto,
+  })
+  async leerDetalle(
+    @Param('id') id: string,
+    @CurrentUser() usuario: User,
+  ): Promise<IncidenciaDetalleDto> {
+    return this.incidenciasService.leerDetalle(usuario.id, id);
   }
 
   @Get(':incidenciaId/evidencias/:evidenciaId')

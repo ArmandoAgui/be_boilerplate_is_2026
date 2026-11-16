@@ -15,6 +15,9 @@ import type { ActualizarEstadoIncidenciaDto } from '../dto/actualizar-estado-inc
 import { EstadoIncidenciaActualizadoDto } from '../dto/estado-incidencia-actualizado.dto.js';
 import type { ListarIncidenciasDto } from '../dto/listar-incidencias.dto.js';
 import type { ListadoIncidenciasDto } from '../dto/incidencia-listado.dto.js';
+import { IncidenciaDetalleDto } from '../dto/incidencia-detalle.dto.js';
+import type { ListarIncidenciasMiasDto } from '../dto/listar-incidencias-mias.dto.js';
+import { ListadoIncidenciasMiasDto as ListadoIncidenciasMiasResponseDto } from '../dto/incidencias-mias.dto.js';
 import type { ListarResponsablesDto } from '../dto/listar-responsables.dto.js';
 import type { ListadoResponsablesDto } from '../dto/responsable-incidencia.dto.js';
 import type { ActualizarAsignacionDto } from '../dto/actualizar-asignacion.dto.js';
@@ -28,10 +31,12 @@ import type { MimeFotoIncidencia } from '../validators/fotos-incidencia.validato
 import { validarFotosIncidencia } from '../validators/fotos-incidencia.validator.js';
 import {
   AdministradorIncidenciasRequeridoError,
+  IncidenciaDetalleNoEncontradaError,
   IncidenciaResueltaError,
   IncidenciaEvidenciaNoEncontradaError,
   NotificacionesH28FallidasError,
   NotificacionesH28NoDisponiblesError,
+  RolIncidenciaNoAutorizadoError,
   ResponsableIncidenciaNoValidoError,
   SolicitudAsignacionVaciaError,
   UsuarioIncidenciaNoDisponibleError,
@@ -44,6 +49,7 @@ import {
   H28_NOTIFICACIONES_PORT,
   type H28NotificacionesPort,
 } from '../notificaciones/h28-notificaciones.port.js';
+import { puedeLeerIncidencia } from './incidencias-lectura.rules.js';
 
 export interface EvidenciaPrivadaLectura {
   readonly stream: ReadStream;
@@ -74,6 +80,37 @@ export class IncidenciasService {
     if (usuario.rol !== 'ADMINISTRADOR') {
       throw new AdministradorIncidenciasRequeridoError();
     }
+  }
+
+  /** Revalida el rol del usuario que JwtAuthGuard cargó desde la base. */
+  verificarResidenteActivo(usuarioId: string, rol: string): void {
+    if (!isUUID(usuarioId)) throw new UsuarioIncidenciaNoDisponibleError();
+    if (rol !== 'RESIDENTE') {
+      throw new RolIncidenciaNoAutorizadoError(
+        'Solo un residente puede consultar sus incidencias.',
+      );
+    }
+  }
+
+  async listarMias(
+    residenteId: string,
+    rol: string,
+    query: ListarIncidenciasMiasDto,
+  ): Promise<ListadoIncidenciasMiasResponseDto> {
+    this.verificarResidenteActivo(residenteId, rol);
+    const offset = this.calcularOffsetSeguro(query.pagina, query.tamanoPagina);
+    const pagina = await this.incidenciasRepository.listarMias(
+      residenteId,
+      query,
+      offset,
+    );
+
+    return ListadoIncidenciasMiasResponseDto.fromEntity({
+      datos: pagina.datos,
+      total: pagina.total,
+      pagina: query.pagina,
+      tamanoPagina: query.tamanoPagina,
+    });
   }
 
   async listarAdministrativamente(
@@ -272,6 +309,33 @@ export class IncidenciasService {
     return IncidenciaCreadaDto.fromEntity(entidad);
   }
 
+  async leerDetalle(
+    usuarioId: string,
+    incidenciaId: string,
+  ): Promise<IncidenciaDetalleDto> {
+    if (!isUUID(incidenciaId)) {
+      throw new IncidenciaDetalleNoEncontradaError();
+    }
+
+    const detalle = await this.incidenciasRepository.leerDetalle(
+      usuarioId,
+      incidenciaId,
+      puedeLeerIncidencia,
+    );
+    if (!detalle) throw new IncidenciaDetalleNoEncontradaError();
+    if (detalle.lugar === null) {
+      this.logger.error(
+        `La incidencia ${detalle.id} tiene una ubicación persistida inconsistente.`,
+      );
+      throw new Error('La incidencia no tiene una ubicación consistente.');
+    }
+
+    return IncidenciaDetalleDto.fromEntity({
+      ...detalle,
+      lugar: detalle.lugar,
+    });
+  }
+
   async leerEvidencia(
     usuarioId: string,
     incidenciaId: string,
@@ -305,10 +369,10 @@ export class IncidenciasService {
     );
     if (!evidencia) throw new IncidenciaEvidenciaNoEncontradaError();
 
-    const autorizado =
-      usuario.rol === 'ADMINISTRADOR' ||
-      (usuario.rol === 'RESIDENTE' && evidencia.residenteId === usuarioId) ||
-      (usuario.rol === 'SEGURIDAD' && evidencia.responsableId === usuarioId);
+    const autorizado = puedeLeerIncidencia(
+      { id: usuarioId, rol: usuario.rol },
+      evidencia,
+    );
     if (!autorizado) throw new IncidenciaEvidenciaNoEncontradaError();
 
     if (evidencia.mime !== 'image/jpeg' && evidencia.mime !== 'image/png') {
