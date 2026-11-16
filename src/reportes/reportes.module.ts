@@ -1,3 +1,7 @@
+import { CuotasModule } from '../cuotas/cuotas.module.js';
+import { ReportesController as IndicadoresController } from './controllers/reportes.controller.js';
+import { ReportesService as IndicadoresService } from './services/reportes.service.js';
+import { ReportesRepository } from './repositories/reportes.repository.js';
 import {
   Module,
   Header,
@@ -199,5 +203,9 @@ class ReportesController {
     });
   }
 }
-@Module({ controllers: [ReportesController], providers: [ReportesService] })
+@Module({
+  imports: [CuotasModule],
+  controllers: [ReportesController, IndicadoresController],
+  providers: [ReportesService, IndicadoresService, ReportesRepository],
+})
 export class ReportesModule {}

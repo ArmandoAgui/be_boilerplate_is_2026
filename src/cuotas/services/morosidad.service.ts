@@ -20,23 +20,39 @@ import {
 export class MorosidadService {
   constructor(private readonly repo: CuotasRepository) {}
 
-  /** Una fila por unidad con al menos una cuota vencida, ya ordenadas. */
+  /**
+   * Una fila por unidad con al menos una cuota vencida, ya ordenadas.
+   * H29 pasa `vencimiento` para contar solo las cuotas que vencen en su
+   * período; H4 no lo pasa y ve todas las vencidas.
+   */
   async calcular(
     ahora = new Date(),
     torreId?: string,
+    vencimiento?: { desde: Date; hasta: Date },
   ): Promise<FilaMorosidad[]> {
     const hoy = hoyLocal(ahora);
-    const grupos = await this.repo.morosidadPorUnidad(
-      filtroEstado('VENCIDA', hoy),
-      torreId,
-    );
+    const vencidas = filtroEstado('VENCIDA', hoy);
+    const filtroVencidas = vencimiento
+      ? {
+          AND: [
+            vencidas,
+            {
+              fechaVencimiento: {
+                gte: vencimiento.desde,
+                lte: vencimiento.hasta,
+              },
+            },
+          ],
+        }
+      : vencidas;
+    const grupos = await this.repo.morosidadPorUnidad(filtroVencidas, torreId);
     if (grupos.length === 0) return [];
 
     const unidades = await this.repo.unidadesConTorre(
       grupos.map((g) => g.unidadId),
     );
     const cuotas = await this.repo.vencidas({
-      ...filtroEstado('VENCIDA', hoy),
+      ...filtroVencidas,
       ...(torreId ? { unidad: { torreId } } : {}),
     });
     const saldos = new Map<string, Prisma.Decimal>();
