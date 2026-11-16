@@ -62,6 +62,7 @@ sudo sonnet5 deploy \
   --backend-sha SHA_COMPLETO_BACKEND_APROBADO \
   --frontend-sha SHA_COMPLETO_FRONTEND_APROBADO --build
 
+sudo systemctl start sonnet5.service
 sudo sonnet5 status
 sudo sonnet5 logs migrate
 sudo sonnet5 logs gateway
