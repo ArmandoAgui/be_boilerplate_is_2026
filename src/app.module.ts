@@ -3,6 +3,7 @@ import { ReservasModule } from './reservas/reservas.module.js';
 import { VisitasModule } from './visitas/visitas.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
 import { PagosModule } from './pagos/pagos.module.js';
+import { ReportesModule } from './reportes/reportes.module.js';
 import { UnidadesModule } from './unidades/unidades.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -37,6 +38,7 @@ import { DirectorioModule } from './directorio/directorio.module.js';
     VisitasModule,
     CuotasModule,
     PagosModule,
+    ReportesModule,
     ComunicadosModule,
     IncidenciasModule,
     AsambleasModule,
