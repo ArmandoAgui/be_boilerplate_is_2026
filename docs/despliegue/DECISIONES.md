@@ -1,6 +1,6 @@
 # Registro de decisiones técnicas: plataforma Docker
 
-Estado: propuesta implementada, pendiente de revisión del equipo y validación del servidor. Fecha: 16 de noviembre de 2026. Alcance: un condominio, una VM y un volumen de fotos local. Esta entrega no modifica las reglas del Product Owner ni despliega automáticamente.
+Estado: implementada y verificada en EC2 de pruebas el 16 de noviembre; pendiente de revisión del equipo. Fecha: 16 de noviembre de 2026. Alcance: un condominio, una VM y un volumen de fotos local. Esta entrega no modifica las reglas del Product Owner ni despliega automáticamente.
 
 | Decisión | Motivo, consecuencias y límites |
 |---|---|
@@ -31,7 +31,7 @@ Estado: propuesta implementada, pendiente de revisión del equipo y validación 
 ## Riesgos y decisiones pospuestas
 
 - No se automatiza AWS por IaC: esta entrega configura un **servidor existente**. Faltan crear EC2, red, DNS, IAM y bucket conforme a la cuenta y presupuesto del equipo.
-- El bootstrap real en Ubuntu/EC2, ACME público, recuperación en un host perdido, S3 real y arquitectura ARM64 requieren ensayo operativo. Dry-run y dobles de prueba no sustituyen esas comprobaciones.
+- Bootstrap real en Ubuntu/EC2 y ACME público ya se comprobaron en el despliegue de pruebas. Recuperación en un host perdido, S3 real y arquitectura ARM64 requieren ensayo operativo. Dry-run y dobles de prueba no sustituyen esas comprobaciones.
 - La VM y sus volúmenes son un punto único de fallo. No hay replicación, despliegue sin interrupciones, balanceador, autoscaling ni garantía de capacidad o coste.
 - Para varias réplicas se necesitaría almacenamiento de fotos compartido, coordinación de tareas programadas y una estrategia de caché/sesión. En esta entrega se ejecuta una API y una web.
 - Mantener respaldos verificados y una release recuperable; no limpiar volúmenes ni imágenes automáticamente. Ensayar la restauración periódicamente. La privacidad de datos reales exige control de acceso y ciclo de vida en sus copias.
