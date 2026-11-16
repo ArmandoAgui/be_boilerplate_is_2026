@@ -16,6 +16,7 @@ import {
 // VENCIDA no existe en la base: se deriva de fin. El filtro de la bandeja sí
 // la acepta, así que el enum del DTO no puede ser el de Prisma.
 export const ESTADOS_AUTORIZACION = [
+  'PENDIENTE',
   'VIGENTE',
   'USADA',
   'CANCELADA',
@@ -34,6 +35,7 @@ export class CrearAutorizacionDto {
   )
   @IsString()
   @Length(3, 100)
+  @Matches(/^\S+\s+\S+.*$/, { message: 'Indica nombre y apellido' })
   visitanteNombre!: string;
 
   // DUI o pasaporte: alfanumérico sin guiones ni espacios, para que el dato
@@ -41,7 +43,8 @@ export class CrearAutorizacionDto {
   @Matches(/^[A-Za-z0-9]{5,20}$/, {
     message: 'El documento debe tener de 5 a 20 caracteres alfanuméricos',
   })
-  visitanteDocumento!: string;
+  @IsOptional()
+  visitanteDocumento?: string;
 
   // Se exige la zona horaria explícita: sin ella, "2026-11-10T08:00" se
   // interpretaría como UTC y la vigencia quedaría corrida seis horas.
@@ -103,4 +106,17 @@ export class RegistrarEntradaDto {
 export class PresentesDto {
   @IsOptional() @IsString() @Length(1, 50) buscar?: string;
   @IsOptional() @IsUUID() unidadId?: string;
+}
+
+export class SolicitarIngresoDto {
+  @IsUUID() residenteId!: string;
+  @IsUUID() unidadId!: string;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Length(3, 100)
+  @Matches(/^\S+\s+\S+.*$/, { message: 'Indica nombre y apellido' })
+  visitanteNombre!: string;
+  @IsOptional() @Matches(/^[A-Za-z0-9]{5,20}$/) visitanteDocumento?: string;
 }

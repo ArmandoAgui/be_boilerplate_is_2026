@@ -19,6 +19,32 @@ export class VisitasRepository {
 
   sesion(tx: Prisma.TransactionClient = this.prisma) {
     return {
+      bloquearAutorizacion: (id: string) =>
+        tx.$queryRaw`SELECT id FROM "AutorizacionVisita" WHERE id = ${id}::uuid FOR UPDATE`,
+      aprobar: (id: string, residenteId: string) =>
+        tx.autorizacionVisita.updateMany({
+          where: {
+            id,
+            residenteId,
+            estado: 'PENDIENTE',
+            fin: { gte: new Date() },
+          },
+          data: { estado: 'VIGENTE' },
+        }),
+      residenteUnidad: (id: string, unidadId: string) =>
+        tx.usuarioUnidad.findFirst({
+          where: {
+            userId: id,
+            unidadId,
+            user: { rol: 'RESIDENTE', isActive: true },
+            unidad: { activa: true },
+          },
+        }),
+      presenteAutorizacion: (id: string) =>
+        tx.movimientoVisita.findFirst({
+          where: { autorizacionId: id, salidaAt: null },
+          select: { id: true },
+        }),
       unidad: (id: string) =>
         tx.unidad.findUnique({ where: { id }, select: { id: true } }),
       // La pertenencia sale de UsuarioUnidad con el usuario de la sesión; el
@@ -39,7 +65,12 @@ export class VisitasRepository {
       // misma autorización, solo una devuelve count 1.
       cancelar: (id: string, residenteId: string, ahora: Date) =>
         tx.autorizacionVisita.updateMany({
-          where: { id, residenteId, estado: 'VIGENTE' },
+          where: {
+            id,
+            residenteId,
+            estado: { in: ['VIGENTE', 'PENDIENTE'] },
+            fin: { gte: ahora },
+          },
           data: { estado: 'CANCELADA', canceladaAt: ahora },
         }),
 
@@ -56,13 +87,6 @@ export class VisitasRepository {
             visitanteNombre: true,
             visitanteDocumento: true,
           },
-        }),
-      // Si dos guardias registran la misma autorización a la vez, solo uno
-      // obtiene count 1 y el otro recibe el 409.
-      marcarUsada: (id: string) =>
-        tx.autorizacionVisita.updateMany({
-          where: { id, estado: 'VIGENTE' },
-          data: { estado: 'USADA' },
         }),
       crearMovimiento: (data: Prisma.MovimientoVisitaUncheckedCreateInput) =>
         tx.movimientoVisita.create({
@@ -83,11 +107,7 @@ export class VisitasRepository {
     };
   }
 
-  async mias(
-    residenteId: string,
-    query: ListarAutorizacionesDto,
-    ahora: Date,
-  ) {
+  async mias(residenteId: string, query: ListarAutorizacionesDto, ahora: Date) {
     const where: Prisma.AutorizacionVisitaWhereInput = {
       residenteId,
       ...filtroEstado(query.estado, ahora),

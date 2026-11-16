@@ -19,7 +19,9 @@ const FICHA = {
   },
   unidades: {
     where: { unidad: { activa: true } },
-    select: { unidad: { select: { codigo: true, torre: { select: { nombre: true } } } } },
+    select: {
+      unidad: { select: { codigo: true, torre: { select: { nombre: true } } } },
+    },
   },
 } satisfies Prisma.UserSelect;
 export type FilaDirectorio = Prisma.UserGetPayload<{ select: typeof FICHA }>;
@@ -32,7 +34,7 @@ const VISIBLES: Prisma.UserWhereInput = {
 
 @Injectable()
 export class DirectorioRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
   obtener(userId: string) {
     return this.prisma.preferenciaDirectorio.findUnique({
       where: { userId },
@@ -42,7 +44,13 @@ export class DirectorioRepository {
   guardar(userId: string, datos: PreferenciasDirectorioDto) {
     return this.prisma.preferenciaDirectorio.upsert({
       where: { userId },
-      create: { userId, ...datos },
+      create: {
+        userId,
+        visible: datos.visible,
+        mostrarTelefono: datos.mostrarTelefono,
+        mostrarCorreo: datos.mostrarCorreo,
+        mostrarUnidad: datos.mostrarUnidad,
+      },
       update: datos,
       select: CAMPOS,
     });
@@ -51,6 +59,9 @@ export class DirectorioRepository {
     return this.prisma.user.findMany({ where: VISIBLES, select: FICHA });
   }
   visible(id: string) {
-    return this.prisma.user.findFirst({ where: { ...VISIBLES, id }, select: FICHA });
+    return this.prisma.user.findFirst({
+      where: { ...VISIBLES, id },
+      select: FICHA,
+    });
   }
 }

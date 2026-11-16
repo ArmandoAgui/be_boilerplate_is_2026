@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { User } from '@PrismaClient';
 import { NotificacionesService } from '../../notificaciones/services/notificaciones.service.js';
 import { PaquetesRepository } from '../repositories/paquetes.repository.js';
@@ -10,8 +10,6 @@ import type {
 
 @Injectable()
 export class PaquetesService {
-  private readonly log = new Logger(PaquetesService.name);
-
   constructor(
     private readonly repo: PaquetesRepository,
     private readonly notificaciones: NotificacionesService,
@@ -26,34 +24,40 @@ export class PaquetesService {
       // está en la recepción, una unidad dada de baja no existe.
       if (!unidad) throw new NotFoundException('La unidad no existe');
 
-      return sesion.crear({
+      const paquete = await sesion.crear({
         codigo: await sesion.siguienteCodigo(),
         unidadId: data.unidadId,
         empresa: data.empresa,
         descripcion: data.descripcion || null,
         registradoPorId: user.id,
       });
-    });
-
-    // Fuera de la transacción y sin propagar el error: la tarjeta pide que el
-    // paquete quede registrado aunque el aviso falle.
-    try {
-      await this.notificaciones.crear({
-        destinatario: { tipo: 'UNIDAD', id: paquete.unidadId },
-        tipoEvento: 'PAQUETE_RECIBIDO',
-        moduloOrigen: 'PAQUETERIA',
-        titulo: 'Llegó un paquete para tu unidad',
-        mensaje: `El paquete ${paquete.codigo} está disponible en recepción.`,
-        referenciaId: paquete.id,
-        claveEvento: `PAQUETE_RECIBIDO:${paquete.id}`,
-      });
-    } catch (error) {
-      this.log.error(
-        `El paquete ${paquete.id} (${paquete.codigo}) quedó registrado pero falló PAQUETE_RECIBIDO`,
-        error instanceof Error ? error.stack : String(error),
+      const p = Object.fromEntries(
+        new Intl.DateTimeFormat('es-SV', {
+          timeZone: 'America/El_Salvador',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        })
+          .formatToParts(paquete.recibidoAt)
+          .map((x) => [x.type, x.value]),
       );
-    }
-
+      await this.notificaciones.crear(
+        {
+          destinatario: { tipo: 'UNIDAD', id: paquete.unidadId },
+          tipoEvento: 'PAQUETE_RECIBIDO',
+          moduloOrigen: 'PAQUETERIA',
+          titulo: 'Llegó un paquete para tu unidad',
+          mensaje: `Paquete ${paquete.codigo} de ${paquete.empresa} recibido el ${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}.`,
+          referenciaId: paquete.id,
+          claveEvento: `PAQUETE_RECIBIDO:${paquete.id}`,
+        },
+        sesion.tx,
+      );
+      return paquete;
+    });
     return {
       id: paquete.id,
       codigo: paquete.codigo,
@@ -75,6 +79,7 @@ export class PaquetesService {
         codigo: p.codigo,
         unidadCodigo: p.unidad.codigo,
         empresa: p.empresa,
+        descripcion: p.descripcion,
         estado: p.estado,
         recibidoAt: p.recibidoAt,
       })),

@@ -67,7 +67,7 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     prisma = app.get(PrismaService);
     notificaciones = app.get(NotificacionesService);
 
@@ -214,7 +214,9 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
         moduloOrigen: 'PAQUETERIA',
         tipoEvento: 'PAQUETE_RECIBIDO',
         titulo: 'Llegó un paquete para tu unidad',
-        mensaje: `El paquete ${r.body.codigo} está disponible en recepción.`,
+        mensaje: expect.stringMatching(
+          /^Paquete PAQ-\d+ de .+ recibido el \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\.$/,
+        ),
         claveEvento: `PAQUETE_RECIBIDO:${r.body.id}`,
         estado: 'NO_LEIDA',
       });
@@ -239,20 +241,13 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
       ).toBe(false);
     });
 
-    // La tarjeta lo pide explícitamente: el aviso es posterior al commit.
-    it('deja el paquete registrado aunque el aviso falle', async () => {
+    it('revierte recepción si falla el aviso, sin responder un éxito incompleto', async () => {
+      const antes = await prisma.paquete.count({ where: { unidadId } });
       vi.spyOn(notificaciones, 'crear').mockImplementationOnce(() => {
         throw new Error('H28 no responde');
       });
-      const r = await registrar(body()).expect(201);
-      expect(
-        await prisma.paquete.findUnique({ where: { id: r.body.id } }),
-      ).not.toBeNull();
-      expect(
-        await prisma.notificacion.count({
-          where: { referenciaId: r.body.id },
-        }),
-      ).toBe(0);
+      await registrar(body()).expect(500);
+      expect(await prisma.paquete.count({ where: { unidadId } })).toBe(antes);
     });
 
     // Cada caso arma su cuerpo entero dentro de una función: los argumentos de

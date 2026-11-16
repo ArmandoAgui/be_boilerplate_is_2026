@@ -1,3 +1,4 @@
+import { importes } from '../../cuotas/services/importes.js';
 import {
   ConflictException,
   ForbiddenException,
@@ -65,8 +66,8 @@ export class PagosService {
           tx,
         );
         if (yaPagado) return this.repetido(yaPagado, user, dto);
-        if (cuota.estado === 'PAGADA') {
-          throw new ConflictException('La cuota ya está pagada');
+        if (cuota.estado !== 'PENDIENTE') {
+          throw new ConflictException('La cuota ya está pagada o fue anulada');
         }
 
         const numero = await this.repo.siguienteNumero(tx);
@@ -76,7 +77,7 @@ export class PagosService {
             referencia: referenciaPago(ahora, numero),
             cuotaId: cuota.id,
             userId: user.id,
-            monto: new Prisma.Decimal(cuota.monto),
+            monto: importes(cuota, ahora).total,
             ultimos4: ultimos4(dto.numeroTarjeta),
             idempotencyKey: dto.idempotencyKey,
             estado: 'PROCESANDO',
@@ -94,7 +95,12 @@ export class PagosService {
           tx,
         );
         if (resultado.aprobado) {
-          await this.repo.marcarCuotaPagada(cuota.id, new Date(), tx);
+          await this.repo.marcarCuotaPagada(
+            cuota.id,
+            ahora,
+            tx,
+            importes(cuota, ahora).recargo,
+          );
         }
         return this.respuesta(final);
       });

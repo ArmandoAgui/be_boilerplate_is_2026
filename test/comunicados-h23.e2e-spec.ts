@@ -68,7 +68,7 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     db = app.get(PrismaService);
     notificaciones = app.get(NotificacionesService);
     const jwt = app.get(JwtService);
@@ -330,7 +330,7 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
       .set('Authorization', tokens.admin)
       .expect(404);
   });
-  it('lista publicación y lecturas actuales, pagina y ordena sin datos privados', async () => {
+  it('lista publicación y audiencia actual sin confirmaciones de lectura', async () => {
     const r = await publicar(
       body({ alcance: 'TORRE', destinoId: ids.torre }),
     ).expect(201);
@@ -345,7 +345,6 @@ describe.skipIf(!url)('H23 HTTP y PostgreSQL', () => {
     expect(lista.body.datos).toHaveLength(1);
     expect(lista.body.datos[0]).toMatchObject({
       id: r.body.id,
-      leidoPor: 1,
       destinatarios: 2,
     });
     expect(lista.body.datos[0].contenido).toBeUndefined();

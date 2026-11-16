@@ -58,7 +58,7 @@ describe.skipIf(!url)('H28 · avisos de apertura de votación', () => {
     }).compile();
 
     app = module.createNestApplication();
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     db = app.get(PrismaService);
     job = app.get(AbrirVotacionesJob);
     notificaciones = app.get(NotificacionesService);

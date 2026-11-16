@@ -45,10 +45,11 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
     // Se importa el build: conserva emitDecoratorMetadata, que Nest necesita
     // para la inyección de dependencias y el ValidationPipe.
     const { AppModule } = await import('../dist/app.module.js');
-    const { PrismaService } = await import(
-      '../dist/prisma/services/prisma.service.js'
-    );
-    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const { PrismaService } =
+      await import('../dist/prisma/services/prisma.service.js');
+    const mod = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = mod.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
@@ -58,7 +59,7 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     prisma = app.get(PrismaService);
 
     const jwt = app.get(JwtService);
@@ -417,11 +418,17 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
     it.each([
       [
         'una vencida',
-        { inicio: new Date(Date.now() - 10 * HORA), fin: new Date(Date.now() - 2 * HORA) },
+        {
+          inicio: new Date(Date.now() - 10 * HORA),
+          fin: new Date(Date.now() - 2 * HORA),
+        },
       ],
       [
         'una que todavía no empieza',
-        { inicio: new Date(Date.now() + 2 * HORA), fin: new Date(Date.now() + 6 * HORA) },
+        {
+          inicio: new Date(Date.now() + 2 * HORA),
+          fin: new Date(Date.now() + 6 * HORA),
+        },
       ],
       ['una usada', { estado: 'USADA' as const }],
       ['una cancelada', { estado: 'CANCELADA' as const }],
@@ -455,7 +462,7 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
   });
 
   describe('POST entradas con autorización', () => {
-    it('registra PREAUTORIZADA y deja la autorización USADA', async () => {
+    it('registra PREAUTORIZADA y conserva la autorización reutilizable', async () => {
       const a = await sembrarAutorizacion();
       const r = await entrar({ autorizacionId: a.id }).expect(201);
       expect(r.body).toMatchObject({
@@ -466,7 +473,7 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
       const usada = await prisma.autorizacionVisita.findUniqueOrThrow({
         where: { id: a.id },
       });
-      expect(usada.estado).toBe('USADA');
+      expect(usada.estado).toBe('VIGENTE');
       const movimiento = await prisma.movimientoVisita.findUniqueOrThrow({
         where: { id: r.body.id },
       });
@@ -479,17 +486,25 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
       ['cancelada', { estado: 'CANCELADA' as const }],
       [
         'vencida',
-        { inicio: new Date(Date.now() - 10 * HORA), fin: new Date(Date.now() - 2 * HORA) },
+        {
+          inicio: new Date(Date.now() - 10 * HORA),
+          fin: new Date(Date.now() - 2 * HORA),
+        },
       ],
       [
         'antes de su ventana',
-        { inicio: new Date(Date.now() + 2 * HORA), fin: new Date(Date.now() + 6 * HORA) },
+        {
+          inicio: new Date(Date.now() + 2 * HORA),
+          fin: new Date(Date.now() + 6 * HORA),
+        },
       ],
     ])('responde 409 si la autorización está %s', async (_caso, extra) => {
       const a = await sembrarAutorizacion(extra);
       await entrar({ autorizacionId: a.id }).expect(409);
       expect(
-        await prisma.movimientoVisita.count({ where: { autorizacionId: a.id } }),
+        await prisma.movimientoVisita.count({
+          where: { autorizacionId: a.id },
+        }),
       ).toBe(0);
     });
 
@@ -507,7 +522,9 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
         201, 409,
       ]);
       expect(
-        await prisma.movimientoVisita.count({ where: { autorizacionId: a.id } }),
+        await prisma.movimientoVisita.count({
+          where: { autorizacionId: a.id },
+        }),
       ).toBe(1);
     });
   });
@@ -518,17 +535,16 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
       visitanteDocumento: '023456789',
     };
 
-    it('registra SIN_AUTORIZACION con los datos que teclea seguridad', async () => {
-      const r = await entrar({ ...manual, unidadId: otraUnidadId }).expect(201);
-      expect(r.body).toMatchObject({
-        condicion: 'SIN_AUTORIZACION',
-        visitanteNombre: 'Pedro Castillo',
-        unidadCodigo: `${prefijo}-2`,
+    it('rechaza el ingreso directo sin confirmación del residente', async () => {
+      const antes = await prisma.movimientoVisita.count({
+        where: { unidadId: otraUnidadId },
       });
-      const movimiento = await prisma.movimientoVisita.findUniqueOrThrow({
-        where: { id: r.body.id },
-      });
-      expect(movimiento.autorizacionId).toBeNull();
+      await entrar({ ...manual, unidadId: otraUnidadId }).expect(403);
+      expect(
+        await prisma.movimientoVisita.count({
+          where: { unidadId: otraUnidadId },
+        }),
+      ).toBe(antes);
     });
 
     it.each([
@@ -542,8 +558,8 @@ describe.skipIf(!url)('Módulo 4 — Visitas HTTP + PostgreSQL real', () => {
       await entrar(payload).expect(400);
     });
 
-    it('responde 404 con una unidad inexistente', () =>
-      entrar({ ...manual, unidadId: randomUUID() }).expect(404));
+    it('rechaza entrada sin confirmación aunque se suministre otra unidad', () =>
+      entrar({ ...manual, unidadId: randomUUID() }).expect(403));
   });
 
   describe('POST entradas/:id/salida', () => {

@@ -38,13 +38,15 @@ export class VisitasService {
       if (!(await tx.unidad(data.unidadId)))
         throw new NotFoundException('Unidad inexistente');
       if (!(await tx.vinculo(user.id, data.unidadId)))
-        throw new ForbiddenException('La unidad no está vinculada a tu usuario');
+        throw new ForbiddenException(
+          'La unidad no está vinculada a tu usuario',
+        );
 
       const creada = await tx.crear({
         residenteId: user.id,
         unidadId: data.unidadId,
         visitanteNombre: data.visitanteNombre,
-        visitanteDocumento: data.visitanteDocumento,
+        visitanteDocumento: data.visitanteDocumento ?? '',
         inicio,
         fin,
       });
@@ -82,6 +84,7 @@ export class VisitasService {
   async cancelar(user: User, id: string) {
     permitir(user.rol, 'RESIDENTE');
     return this.repo.transaccion(async (tx) => {
+      await tx.bloquearAutorizacion(id);
       // Primero existencia y propiedad, para no responder 409 por algo que el
       // residente ni siquiera puede ver.
       if (!(await tx.autorizacion(id, user.id)))
@@ -116,12 +119,18 @@ export class VisitasService {
 
   async registrarEntrada(user: User, data: RegistrarEntradaDto) {
     permitir(user.rol, 'SEGURIDAD');
+    if (!data.autorizacionId)
+      throw new ForbiddenException(
+        'Se necesita confirmación del residente. Registra una solicitud y espera su aprobación.',
+      );
     return this.repo.transaccion(async (tx) => {
       // Con autorizacionId manda la autorización y los datos del visitante
       // salen de ahí; sin él, seguridad los tecleó en la puerta.
-      const movimiento = data.autorizacionId
-        ? await this.entradaPreautorizada(tx, user, data.autorizacionId)
-        : await this.entradaSinAutorizacion(tx, user, data);
+      const movimiento = await this.entradaPreautorizada(
+        tx,
+        user,
+        data.autorizacionId!,
+      );
       return {
         id: movimiento.id,
         condicion: movimiento.condicion,
@@ -137,18 +146,17 @@ export class VisitasService {
     user: User,
     autorizacionId: string,
   ) {
+    await tx.bloquearAutorizacion(autorizacionId);
     const autorizacion = await tx.autorizacionParaIngreso(autorizacionId);
-    if (!autorizacion)
-      throw new NotFoundException('Autorización inexistente');
+    if (!autorizacion) throw new NotFoundException('Autorización inexistente');
     if (!admiteIngreso(autorizacion))
       throw new ConflictException(
         'La autorización no está vigente o está fuera de su ventana de tiempo',
       );
-    // Se marca usada antes de crear el movimiento: si otro guardia ganó la
-    // carrera, el count queda en 0 y se corta sin registrar el ingreso dos
-    // veces. La unicidad de autorizacionId es el segundo cerrojo.
-    if ((await tx.marcarUsada(autorizacionId)).count !== 1)
-      throw new ConflictException('La autorización ya fue utilizada');
+    if (await tx.presenteAutorizacion(autorizacionId))
+      throw new ConflictException(
+        'El visitante ya tiene una entrada sin salida',
+      );
     return tx.crearMovimiento({
       autorizacionId,
       unidadId: autorizacion.unidadId,
@@ -159,27 +167,46 @@ export class VisitasService {
     });
   }
 
-  private async entradaSinAutorizacion(
-    tx: SesionVisitas,
+  async solicitar(
     user: User,
-    data: RegistrarEntradaDto,
+    data: {
+      residenteId: string;
+      unidadId: string;
+      visitanteNombre: string;
+      visitanteDocumento?: string;
+    },
   ) {
-    const { unidadId, visitanteNombre, visitanteDocumento } = data;
-    if (!unidadId || !visitanteNombre || !visitanteDocumento)
-      throw new BadRequestException(
-        'Sin autorización hacen falta nombre, documento y unidad de destino',
-      );
-    if (!(await tx.unidad(unidadId)))
-      throw new NotFoundException('Unidad inexistente');
-    return tx.crearMovimiento({
-      unidadId,
-      visitanteNombre,
-      visitanteDocumento,
-      condicion: 'SIN_AUTORIZACION',
-      ingresoPorId: user.id,
+    permitir(user.rol, 'SEGURIDAD');
+    return this.repo.transaccion(async (tx) => {
+      if (!(await tx.residenteUnidad(data.residenteId, data.unidadId)))
+        throw new BadRequestException(
+          'El residente no está activo y vinculado a la unidad',
+        );
+      const inicio = new Date();
+      return tx.crear({
+        residenteId: data.residenteId,
+        unidadId: data.unidadId,
+        visitanteNombre: data.visitanteNombre,
+        visitanteDocumento: data.visitanteDocumento ?? '',
+        inicio,
+        fin: new Date(inicio.getTime() + 3600000),
+        estado: 'PENDIENTE',
+      });
     });
   }
-
+  async aprobarSolicitud(user: User, id: string) {
+    permitir(user.rol, 'RESIDENTE');
+    return this.repo.transaccion(async (tx) => {
+      await tx.bloquearAutorizacion(id);
+      if (!(await tx.autorizacion(id, user.id)))
+        throw new NotFoundException('Autorización inexistente');
+      if ((await tx.aprobar(id, user.id)).count !== 1)
+        throw new ConflictException(
+          'La solicitud ya no está pendiente o venció',
+        );
+      return { id, estado: 'VIGENTE' };
+    });
+  }
   async registrarSalida(user: User, id: string) {
     permitir(user.rol, 'SEGURIDAD');
     return this.repo.transaccion(async (tx) => {
@@ -188,9 +215,7 @@ export class VisitasService {
       if (!movimiento) throw new NotFoundException('Visita inexistente');
       const ahora = new Date();
       if ((await tx.registrarSalida(id, user.id, ahora)).count !== 1)
-        throw new ConflictException(
-          'La visita ya tiene una salida registrada',
-        );
+        throw new ConflictException('La visita ya tiene una salida registrada');
       return { id, ingresoAt: movimiento.ingresoAt, salidaAt: ahora };
     });
   }

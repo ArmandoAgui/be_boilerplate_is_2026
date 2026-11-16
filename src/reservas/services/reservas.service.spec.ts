@@ -20,6 +20,7 @@ const tx = {
   bloquearArea: vi.fn(),
   area: vi.fn(),
   futuras: vi.fn(),
+  tieneDeuda: vi.fn(),
   ocupadas: vi.fn(),
   crear: vi.fn(),
   reserva: vi.fn(),
@@ -50,6 +51,7 @@ beforeEach(() => {
     horarios,
   });
   tx.futuras.mockResolvedValue(0);
+  tx.tieneDeuda.mockResolvedValue(null);
   tx.ocupadas.mockResolvedValue([]);
   tx.cancelar.mockResolvedValue({ count: 1 });
   service = new ReservasService(repo as unknown as ReservasRepository);

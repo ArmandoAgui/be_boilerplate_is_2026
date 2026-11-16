@@ -71,7 +71,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     prisma = app.get(PrismaService);
     const { ReservasRepository } =
       await import('../dist/reservas/repositories/reservas.repository.js');
@@ -194,6 +194,7 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
       .expect(403);
     await http()
       .post('/api/v1/users')
+      .set('Authorization', admin)
       .send({
         email: 'escalamiento@condominio.test',
         password: 'Prueba123!',

@@ -18,7 +18,7 @@ describe.skipIf(!url)('Health HTTP del boilerplate', () => {
     }).compile();
     app = fixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
-    await app.init();
+    await app.listen(0, '127.0.0.1');
   });
   it('GET /api/v1 permanece público', async () => {
     await request(app.getHttpServer())

@@ -58,6 +58,7 @@ model User {
   notificaciones     Notificacion[]
   preferenciaDirectorio PreferenciaDirectorio?
   pagos                 Pago[]
+  auditorias            AuditoriaAdministrativa[]
 
   @@map("users")
 }
@@ -190,6 +191,7 @@ model Reserva {
 
 // Módulo 4 — Control de acceso de visitas (H13).
 enum EstadoAutorizacion {
+  PENDIENTE
   VIGENTE
   USADA
   CANCELADA
@@ -212,7 +214,7 @@ model AutorizacionVisita {
   residente          User               @relation(fields: [residenteId], references: [id], onDelete: Restrict)
   unidad             Unidad             @relation(fields: [unidadId], references: [id], onDelete: Restrict)
 
-  movimiento         MovimientoVisita?
+  movimientos        MovimientoVisita[]
 
   @@index([residenteId, estado, inicio])
   // Seguridad busca en la puerta entre las vigentes dentro de su ventana (H14).
@@ -221,6 +223,7 @@ model AutorizacionVisita {
 }
 
 enum EstadoCuota {
+  ANULADA
   PENDIENTE
   PAGADA
 }
@@ -233,6 +236,7 @@ model Cuota {
   monto            Decimal     @db.Decimal(10, 2)
   fechaVencimiento DateTime    @db.Date
   estado           EstadoCuota @default(PENDIENTE)
+  recargoAplicado  Decimal     @default(0) @db.Decimal(10, 2)
   fechaPago        DateTime?   @db.Timestamptz(3)
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -374,9 +378,8 @@ enum Condicion {
 
 model MovimientoVisita {
   id                 String              @id @default(uuid()) @db.Uuid
-  // Única y opcional: la autorización es de uso único, así que no puede
-  // respaldar dos ingresos, y una visita sin autorización no tiene ninguna.
-  autorizacionId     String?             @unique @db.Uuid
+  // Reutilizable durante la vigencia; índice parcial limita a un ingreso abierto.
+  autorizacionId     String?             @db.Uuid
   unidadId           String              @db.Uuid
   // Se copian en lugar de leerse de la autorización: la bitácora debe decir a
   // quién se dejó entrar, aunque después se edite o se borre el origen.
@@ -404,7 +407,7 @@ enum EstadoAsamblea {
 }
 
 model Asamblea {
-  id          String         @id @default(uuid()) @db.Uuid
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   titulo      String         @db.VarChar(100)
   fechaAt     DateTime       @db.Timestamptz(3)
   descripcion String?        @db.VarChar(500)
@@ -421,7 +424,7 @@ model Asamblea {
 }
 
 model TemaVotacion {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   asambleaId String   @db.Uuid
   pregunta   String   @db.VarChar(150)
   aperturaAt DateTime @db.Timestamptz(3)
@@ -439,32 +442,35 @@ model TemaVotacion {
 }
 
 model OpcionVoto {
-  id     String @id @default(uuid()) @db.Uuid
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   temaId String @db.Uuid
   texto  String @db.VarChar(100)
 
   tema  TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
   votos Voto[]
+  participaciones ParticipacionVoto[]
 
   @@unique([temaId, texto])
   @@map("opciones_voto")
 }
 
 model ParticipacionVoto {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   temaId    String   @db.Uuid
   unidadId  String   @db.Uuid
+  opcionId  String?  @db.Uuid
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
   unidad Unidad       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  opcion OpcionVoto?   @relation(fields: [opcionId], references: [id], onDelete: Restrict)
 
   @@unique([unidadId, temaId])
   @@map("participaciones_voto")
 }
 
 model Voto {
-  id       String @id @default(uuid()) @db.Uuid
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   temaId   String @db.Uuid
   opcionId String @db.Uuid
 
@@ -478,6 +484,7 @@ model Voto {
 
 // H16 — Modelo compartido de paquetería. H19 reutiliza esta tabla y enum.
 enum EstadoPaquete {
+  ANULADO
   PENDIENTE
   ENTREGADO
 }
@@ -495,6 +502,8 @@ model Paquete {
   retiraDocumento String?       @db.VarChar(20)
   registradoPorId String        @db.Uuid
   entregadoPorId  String?       @db.Uuid
+  retiraResidenteId String?     @db.Uuid
+  correccionMotivo String?      @db.VarChar(300)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -594,4 +603,17 @@ model PreferenciaDirectorio {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@map("preferencias_directorio")
+}
+
+model AuditoriaAdministrativa {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId String @db.Uuid
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  recurso String
+  recursoId String @db.Uuid
+  accion String
+  motivo String @db.VarChar(300)
+  anterior Json
+  nuevo Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 }

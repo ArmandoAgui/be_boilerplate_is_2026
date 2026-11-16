@@ -1,3 +1,4 @@
+import { tarifaMensual, importes } from './importes.js';
 import {
   ConflictException,
   ForbiddenException,
@@ -28,7 +29,7 @@ export class CuotasService {
     validarPeriodo(periodo, ahora);
     const { aGenerar, omitidas } = await this.planificar(periodo);
     const total = aGenerar.reduce(
-      (suma, u) => suma.plus(u.cuotaMensual),
+      (suma) => suma.plus(tarifaMensual()),
       new Prisma.Decimal(0),
     );
     return {
@@ -56,7 +57,7 @@ export class CuotasService {
           unidadId: u.id,
           periodo,
           concepto: CONCEPTO_MANTENIMIENTO,
-          monto: u.cuotaMensual,
+          monto: tarifaMensual(),
           fechaVencimiento: vence,
         })),
         tx,
@@ -76,7 +77,7 @@ export class CuotasService {
     const unidades = await this.repo.unidadesActivas(tx);
     const existentes = await this.repo.unidadesConCuota(periodo, tx);
     return clasificarUnidades(
-      unidades.map((u) => ({ ...u, montoValido: u.cuotaMensual.gt(0) })),
+      unidades.map((u) => ({ ...u, montoValido: true })),
       new Set(existentes.map((c) => c.unidadId)),
     );
   }
@@ -96,9 +97,10 @@ export class CuotasService {
       query.unidadId,
       (query.pagina - 1) * query.tamanoPagina,
       query.tamanoPagina,
+      ahora,
     );
     return {
-      datos: filas.map((cuota) => this.resumen(cuota, hoy)),
+      datos: filas.map((cuota) => this.resumen(cuota, hoy, ahora)),
       totalPendiente: (pendiente ?? new Prisma.Decimal(0)).toFixed(2),
       total,
       pagina: query.pagina,
@@ -112,7 +114,7 @@ export class CuotasService {
     const cuota = await this.repo.cuotaDeUsuario(id, user.id);
     if (!cuota) throw new NotFoundException('Cuota inexistente');
     return {
-      ...this.resumen(cuota, hoyLocal(ahora)),
+      ...this.resumen(cuota, hoyLocal(ahora), ahora),
       unidadId: cuota.unidadId,
       fechaPago: cuota.fechaPago?.toISOString() ?? null,
     };
@@ -128,12 +130,14 @@ export class CuotasService {
     }
   }
 
-  private resumen(cuota: Cuota, hoy: Date) {
+  private resumen(cuota: Cuota, hoy: Date, ahora: Date) {
     return {
       id: cuota.id,
       concepto: cuota.concepto,
       periodo: cuota.periodo,
-      monto: cuota.monto.toFixed(2),
+      monto: importes(cuota, ahora).total.toFixed(2),
+      montoBase: cuota.monto.toFixed(2),
+      recargo: importes(cuota, ahora).recargo.toFixed(2),
       // Fecha de calendario (AAAA-MM-DD), como pide la convención de la API.
       fechaVencimiento: cuota.fechaVencimiento.toISOString().slice(0, 10),
       estado: estadoVisible(cuota.estado, cuota.fechaVencimiento, hoy),

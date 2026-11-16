@@ -1,3 +1,4 @@
+import type { Prisma } from '@PrismaClient';
 import { Injectable } from '@nestjs/common';
 import type {
   CrearNotificacionInput,
@@ -11,9 +12,12 @@ import { validarCrearNotificacion } from './crear-notificacion.validator.js';
 export class NotificacionesService {
   constructor(private readonly repository: NotificacionesRepository) {}
 
-  crear(datos: CrearNotificacionInput): Promise<CrearNotificacionResult> {
+  crear(
+    datos: CrearNotificacionInput,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CrearNotificacionResult> {
     const entrada = validarCrearNotificacion(datos);
-    return this.repository.crear(entrada);
+    return this.repository.crear(entrada, tx);
   }
 
   crearAvisoVotacionAbierta(

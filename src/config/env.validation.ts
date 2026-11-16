@@ -75,6 +75,12 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     throw new Error('La variable de entorno UPLOADS_DIR no puede estar vacía.');
   }
 
+  const tarifa = readString(raw, 'CUOTA_MENSUAL_USD', '50.00');
+  if (!/^(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?$/.test(tarifa) || Number(tarifa) <= 0)
+    throw new Error(
+      'CUOTA_MENSUAL_USD debe ser un monto positivo de hasta 2 decimales',
+    );
+
   return {
     NODE_ENV: readString(raw, 'NODE_ENV', 'development'),
     PORT: readInt(raw, 'PORT', 3000),
@@ -82,7 +88,11 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     UPLOADS_DIR: uploadsDir,
     JWT_SECRET: jwtSecret,
     JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '15m'),
-    REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
+    REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(
+      raw,
+      'REFRESH_TOKEN_EXPIRES_IN_DAYS',
+      7,
+    ),
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
   };
 }

@@ -46,7 +46,9 @@ export function estadoVisible(
   fin: Date,
   ahora = new Date(),
 ): EstadoAutorizacionFiltro {
-  return estado === 'VIGENTE' && fin < ahora ? 'VENCIDA' : estado;
+  return (estado === 'VIGENTE' || estado === 'PENDIENTE') && fin < ahora
+    ? 'VENCIDA'
+    : estado;
 }
 
 /**
@@ -59,7 +61,10 @@ export function filtroEstado(
   ahora: Date,
 ): Prisma.AutorizacionVisitaWhereInput {
   if (estado === 'VIGENTE') return { estado: 'VIGENTE', fin: { gte: ahora } };
-  if (estado === 'VENCIDA') return { estado: 'VIGENTE', fin: { lt: ahora } };
+  if (estado === 'VENCIDA')
+    return { estado: { in: ['VIGENTE', 'PENDIENTE'] }, fin: { lt: ahora } };
+  if (estado === 'PENDIENTE')
+    return { estado: 'PENDIENTE', fin: { gte: ahora } };
   if (estado) return { estado };
   return {};
 }
