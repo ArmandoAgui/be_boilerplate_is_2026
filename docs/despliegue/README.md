@@ -2,7 +2,7 @@
 
 La plataforma se ejecuta en una sola máquina: Caddy recibe HTTPS, Next.js atiende el navegador y llama a NestJS; NestJS accede a PostgreSQL y a un volumen privado de fotografías. Compose inicia la base, aplica migraciones una vez y espera los healthchecks antes de abrir la web. No se publican los puertos de Next, Nest ni PostgreSQL.
 
-Esta entrega se construye sobre los PR de integración [backend #35](https://github.com/ArmandoAgui/be_boilerplate_is_2026/pull/35) y [frontend #31](https://github.com/ArmandoAgui/fe_boilerplate_is_2026/pull/31). Los PR de Docker apuntan temporalmente a su rama de integración para mostrar solo la infraestructura. Integrar primero los cambios funcionales; actualizar las ramas de Docker con el resultado aprobado y cambiar su destino a `develop`. El script despliega **dos SHA completos aprobados que contengan Docker**, nunca la última `develop` implícitamente.
+Esta entrega se construye sobre los PR de integración [backend #35](https://github.com/ArmandoAgui/be_boilerplate_is_2026/pull/35) y [frontend #31](https://github.com/ArmandoAgui/fe_boilerplate_is_2026/pull/31). Los PR de Docker apuntan a la actualización de Heber (`feature/integracion-heber-20261116`, backend #39/frontend #34), encadenada a los PR del PO, para mostrar solo la infraestructura. Integrar primero los cambios funcionales; actualizar las ramas de Docker con el resultado aprobado y cambiar su destino a `develop`. El script despliega **dos SHA completos aprobados que contengan Docker**, nunca la última `develop` implícitamente.
 
 ## 1. Servidor y requisitos externos
 
