@@ -1,71 +1,39 @@
 # syntax=docker/dockerfile:1
-
-# ===========================================================================
-# Dockerfile multi-stage para la API NestJS.
-#
-# El Postgres de desarrollo NO se construye acá: se levanta desde
-# docker-compose.yml con la imagen oficial `postgres:18-alpine`.
-#
-# Alpine funciona sin instalar libssl porque el schema usa
-# `engineType = "client"`, que no descarga el motor nativo de Rust.
-# ===========================================================================
-
-# --- Etapa 1: dependencias -------------------------------------------------
-FROM node:24-alpine AS deps
+ARG NODE_IMAGE=node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
+FROM ${NODE_IMAGE} AS dependencies
 WORKDIR /app
-
-# El `postinstall` corre `prisma generate`, así que el schema y la config del
-# CLI tienen que estar presentes ANTES del install.
-COPY package*.json ./
+COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
+# Generate only: this placeholder never connects to a real database.
+RUN DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder npm ci
 
-# `prisma generate` lee datasource.url aunque no se conecte a la base.
-# Se le pasa un placeholder para que no falle durante el build.
-ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
-RUN npm ci
-
-# --- Etapa 2: build --------------------------------------------------------
-FROM node:24-alpine AS builder
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
-# Incluye src/generated/prisma, producido por el postinstall de la etapa deps.
-COPY --from=deps /app/src ./src
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/src ./src
 COPY . .
+RUN npm run build && npm prune --omit=dev --ignore-scripts
 
-RUN npm run build
-
-# Se eliminan las devDependencies para copiar solo runtime a la imagen final.
-# Nota: `prisma`, `dotenv` y `tsx` son dependencies (no devDependencies) a
-# propósito, porque el contenedor corre `prisma migrate deploy` al arrancar y
-# `prisma db seed` a demanda; este prune se las llevaría.
-RUN npm prune --omit=dev
-
-# --- Etapa 3: runtime ------------------------------------------------------
-FROM node:24-alpine AS runner
+FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
-
-ENV NODE_ENV=production
-ENV UPLOADS_DIR=/uploads
-
-# El volumen nombrado de Compose se monta sobre este directorio; debe poder
-# escribirlo el usuario sin privilegios que ejecuta Nest.
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.title="SONNET 5 backend" \
+      org.opencontainers.image.revision="${VCS_REF}"
+ENV NODE_ENV=production UPLOADS_DIR=/uploads PORT=3000 CHECKPOINT_DISABLE=1
 RUN mkdir -p /uploads && chown node:node /uploads && chmod 750 /uploads
-
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
-# Necesarios para `prisma migrate deploy` al arrancar el contenedor.
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-# El seed (`prisma db seed`) corre con tsx sobre prisma/seed.ts, que importa el
-# cliente generado desde src/, no desde dist/.
+# Retain generated TS client for the existing explicit development seed command.
 COPY --from=builder /app/src/generated ./src/generated
-
-# La imagen de Node ya trae el usuario `node` sin privilegios.
+COPY --chown=node:node --chmod=755 deploy/runtime-entrypoint.sh ./deploy/runtime-entrypoint.sh
+COPY --chown=node:node deploy/crear-admin.mjs deploy/migrar.mjs deploy/importar-condominio.mjs ./deploy/
 USER node
-
 EXPOSE 3000
-
+HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/v1/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+ENTRYPOINT ["./deploy/runtime-entrypoint.sh"]
 CMD ["node", "dist/main.js"]

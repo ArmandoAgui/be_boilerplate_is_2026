@@ -1,7 +1,17 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { User } from '@PrismaClient';
-import { DirectorioRepository, type FilaDirectorio } from './directorio.repository.js';
-import type { BuscarDirectorioDto, PreferenciasDirectorioDto } from './directorio.dto.js';
+import {
+  DirectorioRepository,
+  type FilaDirectorio,
+} from './directorio.repository.js';
+import type {
+  BuscarDirectorioDto,
+  PreferenciasDirectorioDto,
+} from './directorio.dto.js';
 
 const APAGADAS: PreferenciasDirectorioDto = {
   visible: false,
@@ -20,7 +30,9 @@ function proyectar(f: FilaDirectorio) {
     nombre: f.nombre,
     telefono: p?.mostrarTelefono ? (f.telefono ?? null) : null,
     correo: p?.mostrarCorreo ? f.email : null,
-    unidad: p?.mostrarUnidad ? f.unidades.map((u) => u.unidad.codigo).join(', ') || null : null,
+    unidad: p?.mostrarUnidad
+      ? f.unidades.map((u) => u.unidad.codigo).join(', ') || null
+      : null,
   };
 }
 
@@ -29,7 +41,9 @@ export class DirectorioService {
   constructor(private readonly repo: DirectorioRepository) {}
   private permitir(user: User) {
     if (user.rol !== 'RESIDENTE')
-      throw new ForbiddenException('No tienes permiso para realizar esta operación');
+      throw new ForbiddenException(
+        'No tienes permiso para realizar esta operación',
+      );
   }
   // Sin fila guardada: privacidad por defecto (no aparece, nada compartido).
   async obtener(user: User): Promise<PreferenciasDirectorioDto> {
@@ -38,7 +52,10 @@ export class DirectorioService {
   }
   // Siempre se guardan las del usuario de la sesión; si visible es falso,
   // los tres campos se guardan en falso.
-  async guardar(user: User, dto: PreferenciasDirectorioDto): Promise<PreferenciasDirectorioDto> {
+  async guardar(
+    user: User,
+    dto: PreferenciasDirectorioDto,
+  ): Promise<PreferenciasDirectorioDto> {
     this.permitir(user);
     const datos = dto.visible ? dto : APAGADAS;
     return this.repo.guardar(user.id, {
@@ -49,7 +66,6 @@ export class DirectorioService {
     });
   }
   async buscar(user: User, dto: BuscarDirectorioDto) {
-    this.permitir(user);
     const termino = normalizar(dto.buscar);
     const filas = await this.repo.visibles();
     const coinciden = filas
@@ -71,14 +87,15 @@ export class DirectorioService {
       );
     const { pagina, tamanoPagina } = dto;
     return {
-      datos: coinciden.slice((pagina - 1) * tamanoPagina, pagina * tamanoPagina).map(proyectar),
+      datos: coinciden
+        .slice((pagina - 1) * tamanoPagina, pagina * tamanoPagina)
+        .map(proyectar),
       total: coinciden.length,
       pagina,
       tamanoPagina,
     };
   }
   async ficha(user: User, id: string) {
-    this.permitir(user);
     const fila = await this.repo.visible(id);
     if (!fila) throw new NotFoundException('Perfil inexistente u oculto');
     return proyectar(fila);

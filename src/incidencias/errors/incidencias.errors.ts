@@ -84,9 +84,7 @@ export class UsuarioIncidenciaNoDisponibleError extends IncidenciaDomainError {
 }
 
 export class RolIncidenciaNoAutorizadoError extends IncidenciaDomainError {
-  constructor(
-    message = 'Solo un residente puede reportar incidencias.',
-  ) {
+  constructor(message = 'Solo un residente puede reportar incidencias.') {
     super('ROL_NO_AUTORIZADO', message);
   }
 }
@@ -162,10 +160,7 @@ export class NotificacionesH28FallidasError extends IncidenciaDomainError {
 
 export class IncidenciaDetalleNoEncontradaError extends IncidenciaDomainError {
   constructor() {
-    super(
-      'INCIDENCIA_DETALLE_NO_ENCONTRADA',
-      'Incidencia no encontrada.',
-    );
+    super('INCIDENCIA_DETALLE_NO_ENCONTRADA', 'Incidencia no encontrada.');
   }
 }
 

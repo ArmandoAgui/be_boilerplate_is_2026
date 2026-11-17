@@ -18,3 +18,9 @@ README.md
 docker-compose.yml
 Dockerfile
 .dockerignore
+/deploy/tests/
+/deploy/backups/
+/deploy/secrets/
+/deploy/*.env
+/deploy/__pycache__/
+/test-results/

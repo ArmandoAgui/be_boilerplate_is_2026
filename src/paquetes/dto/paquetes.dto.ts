@@ -10,7 +10,7 @@ import {
   Min,
 } from 'class-validator';
 
-export const ESTADOS_PAQUETE = ['PENDIENTE', 'ENTREGADO'] as const;
+export const ESTADOS_PAQUETE = ['PENDIENTE', 'ENTREGADO', 'ANULADO'] as const;
 export type EstadoPaqueteFiltro = (typeof ESTADOS_PAQUETE)[number];
 
 const recortar = ({ value }: { value: unknown }) =>
@@ -22,14 +22,22 @@ export class CrearPaqueteDto {
   // Se recorta antes de medir: "  A " no es una empresa de tres caracteres.
   @IsString() @Transform(recortar) @Length(2, 60) empresa!: string;
 
-  @IsOptional() @IsString() @Transform(recortar) @Length(0, 120)
+  @IsOptional()
+  @IsString()
+  @Transform(recortar)
+  @Length(0, 120)
   descripcion?: string;
 }
 
 export class ListarPaquetesDto {
+  @IsOptional() @IsString() @Length(0, 60) buscar?: string;
   @IsOptional() @IsIn(ESTADOS_PAQUETE) estado?: EstadoPaqueteFiltro;
   @IsOptional() @IsUUID() unidadId?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pagina: number = 1;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
   tamanoPagina: number = 20;
 }

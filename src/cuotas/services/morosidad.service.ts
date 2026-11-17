@@ -1,3 +1,4 @@
+import { importes } from './importes.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type User } from '@PrismaClient';
 import type { ListarMorosidadDto } from '../dto/cuotas.dto.js';
@@ -31,27 +32,38 @@ export class MorosidadService {
   ): Promise<FilaMorosidad[]> {
     const hoy = hoyLocal(ahora);
     const vencidas = filtroEstado('VENCIDA', hoy);
-    const grupos = await this.repo.morosidadPorUnidad(
-      vencimiento
-        ? {
-            AND: [
-              vencidas,
-              {
-                fechaVencimiento: {
-                  gte: vencimiento.desde,
-                  lte: vencimiento.hasta,
-                },
+    const filtroVencidas = vencimiento
+      ? {
+          AND: [
+            vencidas,
+            { unidad: { activa: true } },
+            {
+              fechaVencimiento: {
+                gte: vencimiento.desde,
+                lte: vencimiento.hasta,
               },
-            ],
-          }
-        : vencidas,
-      torreId,
-    );
+            },
+          ],
+        }
+      : vencidas;
+    const grupos = await this.repo.morosidadPorUnidad(filtroVencidas, torreId);
     if (grupos.length === 0) return [];
 
     const unidades = await this.repo.unidadesConTorre(
       grupos.map((g) => g.unidadId),
     );
+    const cuotas = await this.repo.vencidas({
+      ...filtroVencidas,
+      ...(torreId ? { unidad: { torreId } } : {}),
+    });
+    const saldos = new Map<string, Prisma.Decimal>();
+    for (const c of cuotas)
+      saldos.set(
+        c.unidadId,
+        (saldos.get(c.unidadId) ?? new Prisma.Decimal(0)).add(
+          importes(c, ahora).total,
+        ),
+      );
     const porId = new Map(unidades.map((u) => [u.id, u]));
 
     const filas = grupos.flatMap((g): FilaMorosidad[] => {
@@ -64,7 +76,9 @@ export class MorosidadService {
           codigo: unidad.codigo,
           torre: unidad.torre.nombre,
           cuotasVencidas: g._count._all,
-          saldoVencido: (g._sum.monto ?? new Prisma.Decimal(0)).toFixed(2),
+          saldoVencido: (
+            saldos.get(g.unidadId) ?? new Prisma.Decimal(0)
+          ).toFixed(2),
           vencimientoMasAntiguo: masAntiguo.toISOString().slice(0, 10),
           diasAtraso: diasEntre(masAntiguo, hoy),
         },
@@ -102,7 +116,9 @@ export class MorosidadService {
       cuotas: cuotas.map((c) => ({
         id: c.id,
         periodo: c.periodo,
-        monto: c.monto.toFixed(2),
+        monto: importes(c, ahora).total.toFixed(2),
+        montoBase: c.monto.toFixed(2),
+        recargo: importes(c, ahora).recargo.toFixed(2),
         fechaVencimiento: c.fechaVencimiento.toISOString().slice(0, 10),
         diasAtraso: diasEntre(c.fechaVencimiento, hoy),
       })),

@@ -274,7 +274,7 @@ describe.skipIf(!testUrl)('H10 HTTP + PostgreSQL local aislado', () => {
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     prisma = app.get(PrismaService) as SqlClient;
 
     await insertarUsuario(ids.residente, 'RESIDENTE', 'Zeta residente');

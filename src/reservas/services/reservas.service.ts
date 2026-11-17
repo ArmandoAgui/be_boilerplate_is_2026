@@ -80,6 +80,10 @@ export class ReservasService {
       if (!area) throw new NotFoundException('Área inexistente');
       if (!area.activa) throw new BadRequestException('El área está inactiva');
       const ahora = new Date();
+      if (await tx.tieneDeuda(user.id, ahora))
+        throw new ConflictException(
+          'No puedes reservar hasta pagar tus cuotas vencidas',
+        );
       const inicio = new Date(data.inicio);
       const fin = validarReserva(
         inicio,
@@ -136,6 +140,10 @@ export class ReservasService {
       if (!area?.activa)
         throw new ConflictException('El área está inactiva o ya no existe');
       const ahora = new Date();
+      if (await tx.tieneDeuda(reserva.userId, ahora))
+        throw new ConflictException(
+          'El residente tiene cuotas vencidas; debe pagarlas antes de aprobar',
+        );
       // Revalidar condiciones actuales: el horario no quedó apartado al solicitar.
       if (
         reserva.inicio <= ahora ||

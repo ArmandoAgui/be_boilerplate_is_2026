@@ -1,6 +1,7 @@
+import { Prisma } from '@PrismaClient';
+import { importes } from '../services/importes.js';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import type { Prisma } from '@PrismaClient';
 import { CONCEPTO_MANTENIMIENTO } from '../services/cuotas.rules.js';
 
 export const CUOTAS_POR_VENCER_TAMANO_LOTE = 100;
@@ -73,6 +74,7 @@ export class CuotasRepository {
     unidadId: string,
     skip: number,
     take: number,
+    ahora = new Date(),
   ) {
     const [filas, total, suma] = await this.prisma.$transaction([
       this.prisma.cuota.findMany({
@@ -83,12 +85,16 @@ export class CuotasRepository {
       }),
       this.prisma.cuota.count({ where }),
       // El total pendiente incluye las vencidas: en la base ambas son PENDIENTE.
-      this.prisma.cuota.aggregate({
-        where: { unidadId, estado: 'PENDIENTE' },
-        _sum: { monto: true },
-      }),
+      this.prisma.cuota.findMany({ where: { unidadId, estado: 'PENDIENTE' } }),
     ]);
-    return { filas, total, pendiente: suma._sum.monto };
+    return {
+      filas,
+      total,
+      pendiente: suma.reduce(
+        (total, c) => total.add(importes(c, ahora).total),
+        new Prisma.Decimal(0),
+      ),
+    };
   }
 
   /** Busca la cuota solo entre las unidades del usuario: si no es suya, no existe. */
@@ -109,6 +115,10 @@ export class CuotasRepository {
       _sum: { monto: true },
       _min: { fechaVencimiento: true },
     });
+  }
+
+  vencidas(filtro: Prisma.CuotaWhereInput) {
+    return this.prisma.cuota.findMany({ where: filtro });
   }
 
   unidadesConTorre(ids: string[]) {

@@ -184,8 +184,7 @@ export interface IncidenciaEstadoBloqueada {
   readonly estado: EstadoIncidencia;
 }
 
-export interface EstadoIncidenciaActualizadaRecord
-  extends IncidenciaEstadoBloqueada {
+export interface EstadoIncidenciaActualizadaRecord extends IncidenciaEstadoBloqueada {
   readonly estado: EstadoIncidenciaDestino;
   readonly updatedAt: Date;
 }
@@ -296,9 +295,7 @@ export class IncidenciasRepository {
           throw new UsuarioIncidenciaNoDisponibleError();
         }
 
-        const [alcance] = await tx.$queryRaw<
-          IncidenciaDetalleAccesoSqlRow[]
-        >`
+        const [alcance] = await tx.$queryRaw<IncidenciaDetalleAccesoSqlRow[]>`
           SELECT
             "residente_id"::text AS "residenteId",
             "responsable_id"::text AS "responsableId"
@@ -427,11 +424,14 @@ export class IncidenciasRepository {
             ${where}
           `,
         );
-        if (!conteo) throw new Error('La consulta no devolvió el conteo propio.');
+        if (!conteo)
+          throw new Error('La consulta no devolvió el conteo propio.');
 
         const total = Number(conteo.total);
         if (!Number.isSafeInteger(total) || total < 0) {
-          throw new Error('El conteo de incidencias propias excede el entero seguro.');
+          throw new Error(
+            'El conteo de incidencias propias excede el entero seguro.',
+          );
         }
 
         const filas =
@@ -451,15 +451,13 @@ export class IncidenciasRepository {
                 OFFSET ${offset}
               `);
 
-        const datos = filas.map(
-          (fila): IncidenciaMiaEntity => ({
-            id: fila.id,
-            codigo: fila.codigo,
-            categoria: fila.categoria,
-            createdAt: fila.createdAt,
-            estado: fila.estado,
-          }),
-        );
+        const datos = filas.map((fila): IncidenciaMiaEntity => ({
+          id: fila.id,
+          codigo: fila.codigo,
+          categoria: fila.categoria,
+          createdAt: fila.createdAt,
+          estado: fila.estado,
+        }));
 
         return { datos, total };
       },

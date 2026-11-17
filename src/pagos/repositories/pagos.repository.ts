@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import type { EstadoCuota, EstadoPago, Prisma } from '@PrismaClient';
+import { Prisma, type EstadoCuota, type EstadoPago } from '@PrismaClient';
 
 /** Cuota leída con bloqueo de fila; el monto viaja como texto para no perder decimales. */
 export interface CuotaBloqueada {
@@ -9,6 +9,8 @@ export interface CuotaBloqueada {
   concepto: string;
   monto: string;
   estado: EstadoCuota;
+  fechaVencimiento: Date;
+  recargoAplicado: string;
 }
 
 const CON_CONCEPTO = { cuota: { select: { concepto: true } } } as const;
@@ -51,7 +53,7 @@ export class PagosRepository {
     tx: Prisma.TransactionClient,
   ): Promise<CuotaBloqueada | null> {
     const filas = await tx.$queryRaw<CuotaBloqueada[]>`
-      SELECT id, "unidadId", concepto, monto::text AS monto, estado::text AS estado
+      SELECT id, "unidadId", concepto, monto::text AS monto, estado::text AS estado, "fechaVencimiento", "recargoAplicado"::text AS "recargoAplicado"
       FROM "Cuota"
       WHERE id = ${cuotaId}::uuid
       FOR UPDATE`;
@@ -96,10 +98,11 @@ export class PagosRepository {
     cuotaId: string,
     fechaPago: Date,
     tx: Prisma.TransactionClient,
+    recargoAplicado: Prisma.Decimal = new Prisma.Decimal(0),
   ) {
     return tx.cuota.update({
       where: { id: cuotaId },
-      data: { estado: 'PAGADA', fechaPago },
+      data: { estado: 'PAGADA', fechaPago, recargoAplicado },
     });
   }
 

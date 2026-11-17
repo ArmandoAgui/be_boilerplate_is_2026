@@ -1,6 +1,7 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { Prisma } from '@PrismaClient';
+import { hoyLocal } from '../../cuotas/services/cuotas.rules.js';
 import { ANTICIPACION_CANCELACION_MS } from '../services/reservas.rules.js';
 import type {
   CrearAreaDto,
@@ -32,6 +33,15 @@ export class ReservasRepository {
         tx.$queryRaw`SELECT id FROM "AreaComun" WHERE id = ${id}::uuid FOR UPDATE`,
       area: (id: string) =>
         tx.areaComun.findUnique({ where: { id }, include: includeArea }),
+      tieneDeuda: (userId: string, ahora: Date) =>
+        tx.cuota.findFirst({
+          where: {
+            estado: 'PENDIENTE',
+            fechaVencimiento: { lt: hoyLocal(ahora) },
+            unidad: { usuarios: { some: { userId } } },
+          },
+          select: { id: true },
+        }),
       futuras: (userId: string, ahora: Date) =>
         tx.reserva.count({
           where: { userId, estado: 'CONFIRMADA', inicio: { gt: ahora } },

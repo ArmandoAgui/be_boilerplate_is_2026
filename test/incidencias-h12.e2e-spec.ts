@@ -9,7 +9,15 @@ import { JwtService } from '@nestjs/jwt';
 import { ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import sharp from 'sharp';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 const testUrl = process.env.TEST_DATABASE_URL;
 if (testUrl) {
@@ -43,11 +51,7 @@ const ids = {
   area: randomUUID(),
 };
 
-type EstadoIncidenciaTest =
-  | 'ABIERTA'
-  | 'ASIGNADA'
-  | 'EN_PROCESO'
-  | 'RESUELTA';
+type EstadoIncidenciaTest = 'ABIERTA' | 'ASIGNADA' | 'EN_PROCESO' | 'RESUELTA';
 
 type SqlClient = {
   $executeRaw: (
@@ -221,22 +225,27 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     prisma = app.get(PrismaService) as SqlClient;
 
     await insertarUsuario(ids.residente, 'Residente H12', 'RESIDENTE');
-    await insertarUsuario(
-      ids.otroResidente,
-      'Otro residente H12',
-      'RESIDENTE',
-    );
+    await insertarUsuario(ids.otroResidente, 'Otro residente H12', 'RESIDENTE');
     await insertarUsuario(
       ids.residenteSinReportes,
       'Residente sin reportes H12',
       'RESIDENTE',
     );
-    await insertarUsuario(ids.inactivo, 'Residente inactivo H12', 'RESIDENTE', false);
-    await insertarUsuario(ids.eliminado, 'Residente eliminado H12', 'RESIDENTE');
+    await insertarUsuario(
+      ids.inactivo,
+      'Residente inactivo H12',
+      'RESIDENTE',
+      false,
+    );
+    await insertarUsuario(
+      ids.eliminado,
+      'Residente eliminado H12',
+      'RESIDENTE',
+    );
     await insertarUsuario(
       ids.administrador,
       'Administrador H12',
@@ -302,7 +311,8 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
     administradorBearer = token(ids.administrador, 'Administrador H12');
     seguridadABearer = token(ids.seguridadA, 'Seguridad H12 A');
     seguridadBBearer = token(ids.seguridadB, 'Seguridad H12 B');
-    await db().$executeRaw`DELETE FROM "users" WHERE "id" = ${ids.eliminado}::uuid`;
+    await db()
+      .$executeRaw`DELETE FROM "users" WHERE "id" = ${ids.eliminado}::uuid`;
   }, 60_000);
 
   afterEach(limpiarIncidencias, 30_000);
@@ -704,9 +714,8 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
       .send({ estado: 'EN_PROCESO' })
       .expect(200);
 
-    const { NotificacionesService } = await import(
-      '../dist/notificaciones/services/notificaciones.service.js'
-    );
+    const { NotificacionesService } =
+      await import('../dist/notificaciones/services/notificaciones.service.js');
     const notificaciones = app!.get(NotificacionesService);
     const crearAviso = vi
       .spyOn(notificaciones, 'crear')
@@ -771,8 +780,10 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
 
   it('filtra todos los estados por residente y pagina con orden estable en empates', async () => {
     const fechaEmpatada = new Date('2026-11-14T16:00:00.000Z');
-    const idsOrdenados = Array.from({ length: 25 }, (_, index) =>
-      `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    const idsOrdenados = Array.from(
+      { length: 25 },
+      (_, index) =>
+        `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
     );
     const estados: EstadoIncidenciaTest[] = [
       'ABIERTA',
@@ -955,15 +966,11 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
       )
     `;
 
-    const { IncidenciasRepository } = await import(
-      '../dist/incidencias/repositories/incidencias.repository.js'
-    );
+    const { IncidenciasRepository } =
+      await import('../dist/incidencias/repositories/incidencias.repository.js');
     const repository = app!.get(IncidenciasRepository);
     const originalPrisma = Reflect.get(repository, 'prisma') as object;
-    const originalTransaction = Reflect.get(
-      originalPrisma,
-      '$transaction',
-    ) as (
+    const originalTransaction = Reflect.get(originalPrisma, '$transaction') as (
       callback: (tx: object) => Promise<unknown>,
       options?: unknown,
     ) => Promise<unknown>;
@@ -991,16 +998,19 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
             (tx: object) => {
               const txInterceptado = new Proxy(tx, {
                 get(txTarget, txProperty) {
-                  const metodo = Reflect.get(
-                    txTarget,
-                    txProperty,
-                    txTarget,
-                  );
-                  if (txProperty !== '$queryRaw' || typeof metodo !== 'function') {
+                  const metodo = Reflect.get(txTarget, txProperty, txTarget);
+                  if (
+                    txProperty !== '$queryRaw' ||
+                    typeof metodo !== 'function'
+                  ) {
                     return metodo;
                   }
                   return async (...args: unknown[]) => {
-                    const resultado = await Reflect.apply(metodo, txTarget, args);
+                    const resultado = await Reflect.apply(
+                      metodo,
+                      txTarget,
+                      args,
+                    );
                     consultasDeLectura += 1;
                     if (consultasDeLectura === 3) {
                       avisarLecturaPausada();
@@ -1064,7 +1074,8 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
       expect(detalleConcurrente.body.estado).toBe('ASIGNADA');
       expect(
         detalleConcurrente.body.historial.some(
-          (entrada: { valorNuevo: string }) => entrada.valorNuevo === 'RESUELTA',
+          (entrada: { valorNuevo: string }) =>
+            entrada.valorNuevo === 'RESUELTA',
         ),
       ).toBe(false);
 
@@ -1075,7 +1086,8 @@ describe.skipIf(!testUrl)('H12 HTTP + PostgreSQL local aislado', () => {
       expect(detallePosterior.body.estado).toBe('RESUELTA');
       expect(
         detallePosterior.body.historial.some(
-          (entrada: { valorNuevo: string }) => entrada.valorNuevo === 'RESUELTA',
+          (entrada: { valorNuevo: string }) =>
+            entrada.valorNuevo === 'RESUELTA',
         ),
       ).toBe(true);
     } finally {

@@ -1,9 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  Categoria,
-  EstadoIncidencia,
-  Prioridad,
-} from '@PrismaClient';
+import { Categoria, EstadoIncidencia, Prioridad } from '@PrismaClient';
 import { EvidenciaIncidenciaDto } from './evidencia-incidencia.dto.js';
 import {
   HistorialIncidenciaDto,

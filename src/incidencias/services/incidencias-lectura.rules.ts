@@ -1,7 +1,4 @@
-export type IncidenciaUserRole =
-  | 'RESIDENTE'
-  | 'ADMINISTRADOR'
-  | 'SEGURIDAD';
+export type IncidenciaUserRole = 'RESIDENTE' | 'ADMINISTRADOR' | 'SEGURIDAD';
 
 export interface ActorIncidenciaLectura {
   readonly id: string;

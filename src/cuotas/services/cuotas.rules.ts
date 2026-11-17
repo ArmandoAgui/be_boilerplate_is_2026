@@ -77,11 +77,12 @@ export function clasificarUnidades<
 // ---------- H1: estado de cuenta ----------
 
 /** Estado que ve el residente. VENCIDA no se guarda: se calcula al consultar. */
-export type EstadoVisible = 'PENDIENTE' | 'VENCIDA' | 'PAGADA';
+export type EstadoVisible = 'PENDIENTE' | 'VENCIDA' | 'PAGADA' | 'ANULADA';
 export const ESTADOS_VISIBLES: EstadoVisible[] = [
   'PENDIENTE',
   'VENCIDA',
   'PAGADA',
+  'ANULADA',
 ];
 
 /** Medianoche (UTC) del día de hoy en El Salvador, comparable con columnas DATE. */
@@ -98,6 +99,7 @@ export function estadoVisible(
   fechaVencimiento: Date,
   hoy: Date,
 ): EstadoVisible {
+  if (estado === 'ANULADA') return 'ANULADA';
   if (estado === 'PAGADA') return 'PAGADA';
   return fechaVencimiento < hoy ? 'VENCIDA' : 'PENDIENTE';
 }
@@ -108,6 +110,8 @@ export function filtroEstado(
   hoy: Date,
 ): Prisma.CuotaWhereInput {
   switch (estado) {
+    case 'ANULADA':
+      return { estado: 'ANULADA' };
     case 'PAGADA':
       return { estado: 'PAGADA' };
     case 'VENCIDA':

@@ -67,7 +67,7 @@ describe.skipIf(!url)('H28 · recordatorios de cuotas', () => {
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
     db = app.get(PrismaService);
     job = app.get(CuotasPorVencerJob);
     notificaciones = app.get(NotificacionesService);

@@ -29,14 +29,7 @@ async function main() {
       });
       for (const numero of codigos) {
         const codigo = `${letra}-${numero}`;
-        const cuotaMensual =
-          letra === 'A'
-            ? seccionNombre === 'Norte'
-              ? '50.00'
-              : '55.00'
-            : seccionNombre === 'Norte'
-              ? '45.00'
-              : '50.00';
+        const cuotaMensual = process.env.CUOTA_MENSUAL_USD ?? '50.00'; // Tarifa fija para todas las unidades (PO).
         const u = await prisma.unidad.upsert({
           where: { codigo },
           update: {},

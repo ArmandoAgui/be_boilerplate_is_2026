@@ -1,0 +1,13 @@
+{
+  "torres": [
+    {
+      "nombre": "REEMPLAZAR POR TORRE REAL",
+      "secciones": [
+        {
+          "nombre": "REEMPLAZAR POR SECCION REAL",
+          "unidades": [{ "codigo": "REEMPLAZAR-UNIDAD" }]
+        }
+      ]
+    }
+  ]
+}

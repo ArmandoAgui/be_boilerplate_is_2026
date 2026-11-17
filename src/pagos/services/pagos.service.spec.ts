@@ -22,6 +22,8 @@ const cuotaPendiente: CuotaBloqueada = {
   concepto: 'Cuota de mantenimiento',
   monto: '50.00',
   estado: 'PENDIENTE',
+  fechaVencimiento: new Date('2099-01-10T00:00:00Z'),
+  recargoAplicado: '0.00',
 };
 const dto = (numeroTarjeta = '4242424242424242'): CrearPagoDto => ({
   cuotaId: 'c1',
@@ -88,6 +90,7 @@ describe('H2: pagar una cuota', () => {
       'c1',
       expect.any(Date),
       expect.anything(),
+      new Prisma.Decimal(0),
     );
   });
 

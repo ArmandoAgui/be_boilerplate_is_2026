@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 
 export const TEMAS_APERTURA_TAMANO_LOTE = 100;
@@ -98,7 +98,7 @@ export class AsambleasRepository {
       select: { id: true, createdAt: true },
     });
   }
-    // H22: conteo por opción. Solo lee Voto (no tiene unidad ni usuario).
+  // H22: conteo por opción. Solo lee Voto (no tiene unidad ni usuario).
   votosPorOpcion(temaId: string) {
     return this.prisma.voto.groupBy({
       by: ['opcionId'],
@@ -112,6 +112,7 @@ export class AsambleasRepository {
       where: { temaId },
       select: {
         createdAt: true,
+        opcion: { select: { texto: true } },
         unidad: { select: { id: true, codigo: true } },
       },
       orderBy: [{ createdAt: 'asc' }, { unidad: { codigo: 'asc' } }],
@@ -131,13 +132,23 @@ export class AsambleasRepository {
       async (tx) => {
         const tema = await tx.temaVotacion.findUnique({
           where: { id: temaId },
-          include: { opciones: { select: { id: true } } },
+          include: {
+            asamblea: { select: { estado: true } },
+            opciones: { select: { id: true } },
+          },
         });
         if (!tema) return null;
+        const ahora = new Date();
+        if (
+          tema.asamblea.estado !== 'PUBLICADA' ||
+          ahora < tema.aperturaAt ||
+          ahora > tema.cierreAt
+        )
+          throw new ConflictException('Este tema no está abierto para votar');
         const opcionValida = tema.opciones.some((o) => o.id === opcionId);
         if (!opcionValida) return { opcionInvalida: true as const };
         const participacion = await tx.participacionVoto.create({
-          data: { temaId, unidadId },
+          data: { temaId, unidadId, opcionId },
         });
         await tx.voto.create({ data: { temaId, opcionId } });
         return participacion;

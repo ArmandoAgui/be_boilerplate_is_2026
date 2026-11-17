@@ -101,6 +101,62 @@ export class ComunicadosRepository {
       { isolationLevel: 'RepeatableRead' },
     );
   }
+  private audiencia(userId: string): Prisma.ComunicadoWhereInput {
+    const unidades = { some: { usuarios: { some: { userId } } } };
+    return {
+      OR: [
+        { alcance: 'TODOS' },
+        { alcance: 'TORRE', torre: { unidades } },
+        { alcance: 'SECCION', seccion: { unidades } },
+      ],
+    };
+  }
+  mios(userId: string, query: PaginaComunicadosDto) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const where = this.audiencia(userId);
+        const filas = await tx.comunicado.findMany({
+          where,
+          select: {
+            id: true,
+            titulo: true,
+            alcance: true,
+            createdAt: true,
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip: (query.pagina - 1) * query.tamanoPagina,
+          take: query.tamanoPagina,
+        });
+        return {
+          datos: filas.map((c) => ({
+            id: c.id,
+            titulo: c.titulo,
+            alcance: c.alcance,
+            creadoAt: c.createdAt,
+          })),
+          total: await tx.comunicado.count({ where }),
+          pagina: query.pagina,
+          tamanoPagina: query.tamanoPagina,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  detalle(userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const c = await tx.comunicado.findFirst({
+        where: { id, ...this.audiencia(userId) },
+      });
+      if (!c) throw new NotFoundException('Comunicado inexistente');
+      return {
+        id: c.id,
+        titulo: c.titulo,
+        contenido: c.contenido,
+        alcance: c.alcance,
+        creadoAt: c.createdAt,
+      };
+    });
+  }
   administracion(query: PaginaComunicadosDto) {
     return this.prisma.$transaction(
       async (tx) => {
@@ -130,9 +186,6 @@ export class ComunicadosRepository {
                   : null),
               creadoAt: c.createdAt,
               destinatarios: await tx.user.count({ where: audiencia }),
-              leidoPor: await tx.lecturaComunicado.count({
-                where: { comunicadoId: c.id, user: audiencia },
-              }),
             };
           }),
         );

@@ -17,6 +17,7 @@ import type { User } from '@PrismaClient';
 import { VisitasHttpFilter } from '../filters/visitas-http.filter.js';
 import { VisitasService } from '../services/visitas.service.js';
 import {
+  SolicitarIngresoDto,
   BuscarAutorizacionesDto,
   CrearAutorizacionDto,
   ListarAutorizacionesDto,
@@ -50,6 +51,19 @@ export class AutorizacionesController {
     return this.service.mias(user, query);
   }
 
+  @Post('solicitudes') solicitar(
+    @CurrentUser() user: User,
+    @Body() data: SolicitarIngresoDto,
+  ) {
+    return this.service.solicitar(user, data);
+  }
+  @Patch(':id/aprobacion') aprobar(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.aprobarSolicitud(user, id);
+  }
+
   @Patch(':id/cancelacion') cancelar(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -75,10 +89,8 @@ export class EntradasController {
   // La salida no crea nada: cierra un movimiento que ya existe, así que
   // devuelve 200 y no el 201 que Nest le pone por defecto a todo POST.
   @HttpCode(HttpStatus.OK)
-  @Post(':id/salida') salida(
-    @CurrentUser() user: User,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  @Post(':id/salida')
+  salida(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
     return this.service.registrarSalida(user, id);
   }
 }

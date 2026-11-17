@@ -59,7 +59,7 @@ describe.skipIf(!testUrl)(
           transform: true,
         }),
       );
-      await app.init();
+      await app.listen(0, '127.0.0.1');
       db = app.get(PrismaService);
       jwt = app.get(JwtService);
 

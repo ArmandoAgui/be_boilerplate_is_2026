@@ -19,6 +19,7 @@ export class PaquetesRepository {
 
   sesion(tx: Prisma.TransactionClient = this.prisma) {
     return {
+      tx,
       // Inactiva cuenta como inexistente para la tarjeta: las dos dan 404.
       unidadActiva: (id: string) =>
         tx.unidad.findFirst({
@@ -48,6 +49,18 @@ export class PaquetesRepository {
 
   async listar(query: ListarPaquetesDto) {
     const where: Prisma.PaqueteWhereInput = {
+      ...(query.buscar
+        ? {
+            OR: [
+              { codigo: { contains: query.buscar, mode: 'insensitive' } },
+              {
+                unidad: {
+                  codigo: { contains: query.buscar, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
       estado: query.estado,
       unidadId: query.unidadId,
     };

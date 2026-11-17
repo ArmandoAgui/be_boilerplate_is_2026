@@ -1,3 +1,4 @@
+import { AdministracionModule } from './administracion/administracion.module.js';
 import { ComunicadosModule } from './comunicados/comunicados.module.js';
 import { ReservasModule } from './reservas/reservas.module.js';
 import { VisitasModule } from './visitas/visitas.module.js';
@@ -23,6 +24,7 @@ import { DirectorioModule } from './directorio/directorio.module.js';
 
 @Module({
   imports: [
+    AdministracionModule,
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,

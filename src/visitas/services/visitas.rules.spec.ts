@@ -31,9 +31,9 @@ describe('Reglas H13', () => {
       ).toThrow(/30 días/));
 
     it.each([0, -1])('rechaza un fin que no supera al inicio (%s h)', (d) =>
-      expect(() =>
-        validarVigencia(enHoras(5), enHoras(5 + d), ahora),
-      ).toThrow(/posterior al inicio/),
+      expect(() => validarVigencia(enHoras(5), enHoras(5 + d), ahora)).toThrow(
+        /posterior al inicio/,
+      ),
     );
 
     it('rechaza una vigencia de más de 24 horas', () =>
@@ -70,7 +70,8 @@ describe('Reglas H13', () => {
     // hecho del pasado que no caduca.
     it.each(['USADA', 'CANCELADA'] as const)(
       'una %s conserva su estado aunque el fin ya pasó',
-      (estado) => expect(estadoVisible(estado, enHoras(-1), ahora)).toBe(estado),
+      (estado) =>
+        expect(estadoVisible(estado, enHoras(-1), ahora)).toBe(estado),
     );
   });
 
@@ -91,9 +92,9 @@ describe('Reglas H13', () => {
         fin: { gte: ahora },
       }));
 
-    it('vencida busca vigentes con fin pasado, no un estado almacenado', () =>
+    it('vencida incluye solicitudes pendientes y autorizaciones con fin pasado', () =>
       expect(filtroEstado('VENCIDA', ahora)).toEqual({
-        estado: 'VIGENTE',
+        estado: { in: ['VIGENTE', 'PENDIENTE'] },
         fin: { lt: ahora },
       }));
 

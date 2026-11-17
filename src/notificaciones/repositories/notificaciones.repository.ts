@@ -59,18 +59,20 @@ export class NotificacionesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Resuelve la audiencia e inserta los avisos en una sola transacción. */
-  async crear(datos: CrearNotificacionInput): Promise<CrearNotificacionResult> {
-    return this.prisma.$transaction(
-      async (tx) => {
-        const destinatarios = await this.resolverDestinatarios(
-          tx,
-          datos.destinatario,
-        );
-        const creadas = await this.insertarAvisos(tx, datos, destinatarios);
-        return { creadas };
-      },
-      { isolationLevel: 'ReadCommitted' },
-    );
+  async crear(
+    datos: CrearNotificacionInput,
+    tx?: Db,
+  ): Promise<CrearNotificacionResult> {
+    const guardar = async (db: Db) => {
+      const destinatarios = await this.resolverDestinatarios(
+        db,
+        datos.destinatario,
+      );
+      return { creadas: await this.insertarAvisos(db, datos, destinatarios) };
+    };
+    return tx
+      ? guardar(tx)
+      : this.prisma.$transaction(guardar, { isolationLevel: 'ReadCommitted' });
   }
 
   /** Bloquea y revalida el tema, persiste su audiencia y marca en una transacción. */
