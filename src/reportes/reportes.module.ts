@@ -1,3 +1,4 @@
+import { ReportePdfService } from './services/reporte-pdf.service.js';
 import { CuotasModule } from '../cuotas/cuotas.module.js';
 import { ReportesController as IndicadoresController } from './controllers/reportes.controller.js';
 import { ReportesService as IndicadoresService } from './services/reportes.service.js';
@@ -206,6 +207,6 @@ class ReportesController {
 @Module({
   imports: [CuotasModule],
   controllers: [ReportesController, IndicadoresController],
-  providers: [ReportesService, IndicadoresService, ReportesRepository],
+  providers: [ReportesService, IndicadoresService, ReportePdfService, ReportesRepository],
 })
 export class ReportesModule {}
