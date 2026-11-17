@@ -1,0 +1,18 @@
+[Unit]
+Description=Plataforma SONNET 5 con Docker Compose
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathIsSymbolicLink=/opt/sonnet5/current
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/sonnet5 up
+ExecStop=/usr/local/bin/sonnet5 stop
+TimeoutStartSec=420
+TimeoutStopSec=120
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
