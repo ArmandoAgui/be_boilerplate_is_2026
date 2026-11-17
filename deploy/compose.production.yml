@@ -1,0 +1,219 @@
+name: ${STACK_NAME:-sonnet5}
+
+x-common: &common
+  restart: unless-stopped
+  init: true
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+  stop_grace_period: 30s
+
+x-database-env: &database-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: '5432'
+  POSTGRES_USER: sonnet5_app
+  POSTGRES_DB: sonnet5
+  POSTGRES_PASSWORD_FILE: /run/secrets/db_app_password
+
+services:
+  postgres:
+    <<: *common
+    image: ${POSTGRES_IMAGE:?Configure POSTGRES_IMAGE desde base-images.env}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    command: [postgres, -c, max_connections=40, -c, shared_buffers=128MB]
+    secrets: [postgres_password, db_owner_password, db_app_password]
+    volumes:
+      # PostgreSQL 18 uses versioned directories under /var/lib/postgresql.
+      - postgres_data:/var/lib/postgresql
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-sonnet5.sh:ro
+    networks: [database]
+    mem_limit: 768m
+    cpus: 0.75
+    shm_size: 128m
+    stop_grace_period: 60s
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          'export PGPASSWORD="$$(cat /run/secrets/postgres_password)"; psql -h 127.0.0.1 -U postgres -d sonnet5 -Atqc "SELECT 1" >/dev/null',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  migrate:
+    <<: *common
+    image: ${API_IMAGE:?Falta imagen de backend de la release}
+    restart: 'no'
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      <<: *database-env
+      NODE_ENV: production
+      CHECKPOINT_DISABLE: '1'
+      POSTGRES_USER: sonnet5_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
+    command: [node, deploy/migrar.mjs]
+    secrets: [db_owner_password]
+    networks: [database]
+    tmpfs: ['/tmp:uid=1000,gid=1000,mode=1777,size=67108864']
+    mem_limit: 512m
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck: { disable: true }
+
+  api:
+    <<: *common
+    image: ${API_IMAGE:?Falta imagen de backend de la release}
+    build:
+      context: ${BACKEND_CONTEXT:-..}
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:?Configure NODE_IMAGE desde base-images.env}
+        VCS_REF: ${BACKEND_SHA:-unknown}
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      <<: *database-env
+      NODE_ENV: production
+      PORT: '3000'
+      UPLOADS_DIR: /uploads
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      JWT_EXPIRES_IN: 15m
+      REFRESH_TOKEN_EXPIRES_IN_DAYS: '7'
+      BCRYPT_SALT_ROUNDS: '12'
+      CUOTA_MENSUAL_USD: ${CUOTA_MENSUAL_USD:-50.00}
+      CHECKPOINT_DISABLE: '1'
+      NODE_OPTIONS: --max-old-space-size=640
+    secrets: [db_app_password, jwt_secret]
+    volumes: [uploads_data:/uploads]
+    tmpfs: ['/tmp:uid=1000,gid=1000,mode=1777,size=134217728']
+    networks: [application, database]
+    mem_limit: 1g
+    cpus: 1.0
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    <<: *common
+    image: ${WEB_IMAGE:?Falta imagen de frontend de la release}
+    build:
+      context: ${FRONTEND_CONTEXT:-../../frontend}
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:?Configure NODE_IMAGE desde base-images.env}
+        VCS_REF: ${FRONTEND_SHA:-unknown}
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+      API_URL: http://api:3000/api/v1/
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=512
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777,size=67108864
+      - /app/.next/cache:uid=1000,gid=1000,mode=0700,size=134217728
+    networks: [application]
+    mem_limit: 768m
+    cpus: 1.0
+    depends_on:
+      api: { condition: service_healthy }
+
+  gateway:
+    <<: *common
+    image: ${CADDY_IMAGE:?Configure CADDY_IMAGE desde base-images.env}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      DOMAIN: ${DOMAIN:?Falta dominio}
+      ACME_EMAIL: ${ACME_EMAIL:?Falta correo para certificados}
+    ports:
+      - '${BIND_ADDRESS:-0.0.0.0}:${HTTP_PORT:-80}:80/tcp'
+      - '${BIND_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443/tcp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    tmpfs: ['/tmp:mode=1777,size=33554432']
+    networks: [edge, application]
+    mem_limit: 128m
+    cpus: 0.25
+    depends_on:
+      web: { condition: service_healthy }
+
+  admin:
+    <<: *common
+    image: ${API_IMAGE:?Falta imagen de backend de la release}
+    profiles: [tools]
+    restart: 'no'
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      <<: *database-env
+      NODE_ENV: production
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Falta correo del administrador inicial}
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+    command: [node, deploy/crear-admin.mjs]
+    secrets: [db_app_password, admin_password]
+    tmpfs: ['/tmp:uid=1000,gid=1000,mode=1777,size=67108864']
+    networks: [database]
+    mem_limit: 512m
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  catalogo:
+    <<: *common
+    image: ${API_IMAGE:?Falta imagen de backend de la release}
+    profiles: [tools]
+    restart: 'no'
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      <<: *database-env
+      NODE_ENV: production
+      CUOTA_MENSUAL_USD: ${CUOTA_MENSUAL_USD:-50.00}
+      CONDOMINIO_FILE: /run/config/condominio.json
+    command: [node, deploy/importar-condominio.mjs]
+    secrets: [db_app_password]
+    volumes:
+      - ${CONDOMINIO_FILE:-/etc/sonnet5/condominio.json}:/run/config/condominio.json:ro
+    networks: [database]
+    mem_limit: 512m
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+secrets:
+  postgres_password:
+    file: ${SECRETS_DIR:?Falta directorio de secretos}/postgres_password
+  db_app_password:
+    file: ${SECRETS_DIR:?Falta directorio de secretos}/db_app_password
+  db_owner_password:
+    file: ${SECRETS_DIR:?Falta directorio de secretos}/db_owner_password
+  jwt_secret:
+    file: ${SECRETS_DIR:?Falta directorio de secretos}/jwt_secret
+  admin_password:
+    file: ${SECRETS_DIR:?Falta directorio de secretos}/admin_password
+
+volumes:
+  postgres_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+  application:
+    internal: true
+  database:
+    internal: true

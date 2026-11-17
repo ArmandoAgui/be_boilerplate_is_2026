@@ -2,6 +2,8 @@
 
 API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con autenticación por usuario y contraseña lista para usar.
 
+Para ejecutar **toda la plataforma en Docker sobre Ubuntu**, comenzar por el [paso a paso de AWS](docs/despliegue/PASO-A-PASO-AWS.md), la [guía de operación](docs/despliegue/README.md) y el [registro de decisiones técnicas](docs/despliegue/DECISIONES.md). Incluye frontend, API, PostgreSQL, HTTPS, bootstrap del servidor y respaldos; el Compose de desarrollo descrito abajo conserva su uso local.
+
 ---
 
 ## Tabla de contenidos

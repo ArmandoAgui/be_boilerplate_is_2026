@@ -1,0 +1,17 @@
+[Unit]
+Description=Respaldo consistente de PostgreSQL y evidencias SONNET 5
+Requires=docker.service
+After=docker.service network-online.target sonnet5.service
+Wants=sonnet5.service
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+ConditionPathIsSymbolicLink=/opt/sonnet5/current
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sonnet5 backup
+TimeoutStartSec=1800
+UMask=0077
+Nice=10
+Restart=on-failure
+RestartSec=300s
