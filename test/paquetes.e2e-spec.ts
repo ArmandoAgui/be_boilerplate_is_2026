@@ -128,7 +128,10 @@ describe.skipIf(!url)('Módulo 5 — Paquetería HTTP + PostgreSQL real', () => 
         { userId: vecinoId, unidadId: otraUnidadId },
       ],
     });
-  });
+    // Treinta segundos y no los diez que vitest da por defecto: este hook
+    // compila el AppModule entero, que hoy arrastra incidencias con sharp,
+    // notificaciones, asambleas y reportes, y además levanta un puerto real.
+  }, 30_000);
 
   beforeEach(async () => {
     vi.restoreAllMocks();
