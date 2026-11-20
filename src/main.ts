@@ -26,12 +26,16 @@ async function bootstrap() {
     }),
   );
 
+  app.enableCors({
+    origin: configService.get('CORS_ORIGIN', { infer: true }),
+    credentials: false,
+  });
   app.enableShutdownHooks();
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('SI Backend Boilerplate')
+    .setTitle('SONNET 5 — Administración de condominio')
     .setDescription('API REST con autenticación por usuario y contraseña.')
-    .setVersion('1.0')
+    .setVersion('1.0.0')
     .addBearerAuth()
     .build();
 

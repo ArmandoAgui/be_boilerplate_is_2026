@@ -203,7 +203,7 @@ Abrir <https://sonnet5.98.81.166.66.sslip.io>. Correo inicial: `00174323@uca.edu
 sudo cat /etc/sonnet5/secrets/admin_password
 ```
 
-No pegar esa contraseña en chats, PR ni documentación. El alta inicial es idempotente: no cambia una contraseña de administrador existente. No se ejecuta `prisma db seed`, porque publica cuentas demo con claves conocidas.
+No pegar esa contraseña en chats, PR ni documentación. El alta inicial es idempotente: no cambia una contraseña de administrador existente. No se ejecuta seed automáticamente. Desde 1.0.0, `sudo sonnet5 seed-demo` invoca el seed común explícito, genera contraseñas privadas aleatorias en una base vacía y conserva las cuentas QA existentes. Ver [despliegue vigente](../06-despliegue.md).
 
 Para poder asociar residentes a unidades, preparar `/etc/sonnet5/condominio.json` con **los datos reales o ficticios identificados para pruebas**, siguiendo `backend/deploy/condominio.example.json`. El archivo inicial tiene `{"torres":[]}`:
 

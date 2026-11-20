@@ -16,6 +16,7 @@ export interface EnvConfig {
   REFRESH_TOKEN_EXPIRES_IN_DAYS: number;
   BCRYPT_SALT_ROUNDS: number;
   CUOTA_MENSUAL_USD: string;
+  CORS_ORIGIN: string;
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -82,7 +83,18 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
       'CUOTA_MENSUAL_USD debe ser un monto positivo de hasta 2 decimales',
     );
 
+  const corsOrigin = readString(raw, 'CORS_ORIGIN', 'http://localhost:3001');
+  const originUrl = new URL(corsOrigin);
+  if (
+    !['http:', 'https:'].includes(originUrl.protocol) ||
+    originUrl.origin !== corsOrigin
+  )
+    throw new Error(
+      'CORS_ORIGIN debe ser un origen HTTP/HTTPS sin ruta ni credenciales',
+    );
+
   return {
+    CORS_ORIGIN: corsOrigin,
     NODE_ENV: readString(raw, 'NODE_ENV', 'development'),
     PORT: readInt(raw, 'PORT', 3000),
     DATABASE_URL: readString(raw, 'DATABASE_URL', ''),
