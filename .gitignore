@@ -71,3 +71,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 !/deploy/base-images.env
 !/deploy/*.env.example
 **/__pycache__/
+
+/.seed-private/
+/.local-platform/

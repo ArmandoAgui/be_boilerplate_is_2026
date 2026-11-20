@@ -391,7 +391,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=Path('/etc/sonnet5/platform.env'))
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('up', 'stop', 'status', 'backup', 'init-admin', 'init-condominio'):
+    for name in ('up', 'stop', 'status', 'backup', 'init-admin', 'init-condominio', 'seed-demo'):
         commands.add_parser(name)
     deploy = commands.add_parser('deploy')
     deploy.add_argument('--backend-sha', required=True)
@@ -432,6 +432,15 @@ def main(argv=None) -> int:
                     app.init_admin()
                 elif args.command == 'init-condominio':
                     app.init_condominio()
+                elif args.command == 'seed-demo':
+                    folder = app.config.parent / 'seed-private'
+                    folder.mkdir(mode=0o700, exist_ok=True)
+                    folder.chmod(0o700)
+                    os.chown(folder, 1000, 1000)
+                    app.compose(app.current(), 'run', '--rm', '-T', '--no-deps',
+                                '-e', 'SEED_DEMO=true', '-e', 'SEED_CREDENTIALS_FILE=/seed-private/cuentas-qa.json',
+                                '-v', str(folder)+':/seed-private', 'api', 'node', 'deploy/seed-demo.mjs')
+                    print('Credenciales nuevas, si se crearon: '+str(folder / 'cuentas-qa.json'))
                 elif args.command == 'restore':
                     app.restore(args.backup)
                 elif args.command == 'rollback':

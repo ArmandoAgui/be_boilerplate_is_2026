@@ -30,7 +30,7 @@ COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 # Retain generated TS client for the existing explicit development seed command.
 COPY --from=builder /app/src/generated ./src/generated
 COPY --chown=node:node --chmod=755 deploy/runtime-entrypoint.sh ./deploy/runtime-entrypoint.sh
-COPY --chown=node:node deploy/crear-admin.mjs deploy/migrar.mjs deploy/importar-condominio.mjs ./deploy/
+COPY --chown=node:node deploy/crear-admin.mjs deploy/migrar.mjs deploy/importar-condominio.mjs deploy/seed-demo.mjs ./deploy/
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=5 \

@@ -24,3 +24,6 @@ Dockerfile
 /deploy/*.env
 /deploy/__pycache__/
 /test-results/
+
+.local-platform
+.seed-private
