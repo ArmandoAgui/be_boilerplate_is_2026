@@ -1,0 +1,21 @@
+# El historial guarda LF siempre. Sin esto, cada clon en Windows marca el
+# archivo completo como modificado y los diff de los PR quedan ilegibles.
+* text=auto eol=lf
+
+# Scripts de Windows: estos si necesitan CRLF en disco o no se ejecutan.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Scripts de shell: LF obligatorio, incluso si alguien clona en Windows.
+*.sh text eol=lf
+
+# Binarios. Git no debe intentar normalizarlos ni mostrarlos como texto.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

@@ -52,6 +52,9 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Evidencias privadas almacenadas en desarrollo local
+/uploads/
+
 # Runtime data
 pids
 *.pid
@@ -60,3 +63,14 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime del despliegue: solo plantillas y código van al repositorio.
+/deploy/secrets/
+/deploy/backups/
+/deploy/*.env
+!/deploy/base-images.env
+!/deploy/*.env.example
+**/__pycache__/
+
+/.seed-private/
+/.local-platform/

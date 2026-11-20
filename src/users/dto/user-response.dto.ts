@@ -20,9 +20,17 @@ export class UserResponseDto {
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: Date;
 
+  @ApiProperty({ enum: ['RESIDENTE', 'ADMINISTRADOR', 'SEGURIDAD'] })
+  rol!: User['rol'];
+
+  @ApiProperty()
+  nombre!: string;
+
   static fromEntity(user: User): UserResponseDto {
     return {
       id: user.id,
+      rol: user.rol,
+      nombre: user.nombre,
       email: user.email,
       isActive: user.isActive,
       createdAt: user.createdAt,

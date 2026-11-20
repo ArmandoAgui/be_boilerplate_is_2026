@@ -13,7 +13,17 @@ coverage
 .DS_Store
 *.tsbuildinfo
 src/generated
+/uploads/
 README.md
 docker-compose.yml
 Dockerfile
 .dockerignore
+/deploy/tests/
+/deploy/backups/
+/deploy/secrets/
+/deploy/*.env
+/deploy/__pycache__/
+/test-results/
+
+.local-platform
+.seed-private

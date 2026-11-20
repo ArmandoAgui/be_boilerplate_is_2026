@@ -7,5 +7,8 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
+    // Las suites comparten TEST_DATABASE_URL y algunas insertan triggers de
+    // falla temporales; ejecutarlas en paralelo contamina las fixtures ajenas.
+    fileParallelism: false,
   },
 });

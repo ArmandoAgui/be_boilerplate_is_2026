@@ -10,10 +10,13 @@ export interface EnvConfig {
   NODE_ENV: string;
   PORT: number;
   DATABASE_URL: string;
+  UPLOADS_DIR: string;
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string;
   REFRESH_TOKEN_EXPIRES_IN_DAYS: number;
   BCRYPT_SALT_ROUNDS: number;
+  CUOTA_MENSUAL_USD: string;
+  CORS_ORIGIN: string;
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -69,13 +72,41 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     );
   }
 
+  const uploadsDir = readString(raw, 'UPLOADS_DIR', './uploads').trim();
+  if (!uploadsDir) {
+    throw new Error('La variable de entorno UPLOADS_DIR no puede estar vacía.');
+  }
+
+  const tarifa = readString(raw, 'CUOTA_MENSUAL_USD', '50.00');
+  if (!/^(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?$/.test(tarifa) || Number(tarifa) <= 0)
+    throw new Error(
+      'CUOTA_MENSUAL_USD debe ser un monto positivo de hasta 2 decimales',
+    );
+
+  const corsOrigin = readString(raw, 'CORS_ORIGIN', 'http://localhost:3001');
+  const originUrl = new URL(corsOrigin);
+  if (
+    !['http:', 'https:'].includes(originUrl.protocol) ||
+    originUrl.origin !== corsOrigin
+  )
+    throw new Error(
+      'CORS_ORIGIN debe ser un origen HTTP/HTTPS sin ruta ni credenciales',
+    );
+
   return {
+    CORS_ORIGIN: corsOrigin,
     NODE_ENV: readString(raw, 'NODE_ENV', 'development'),
     PORT: readInt(raw, 'PORT', 3000),
     DATABASE_URL: readString(raw, 'DATABASE_URL', ''),
+    UPLOADS_DIR: uploadsDir,
+    CUOTA_MENSUAL_USD: tarifa,
     JWT_SECRET: jwtSecret,
     JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '15m'),
-    REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
+    REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(
+      raw,
+      'REFRESH_TOKEN_EXPIRES_IN_DAYS',
+      7,
+    ),
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
   };
 }

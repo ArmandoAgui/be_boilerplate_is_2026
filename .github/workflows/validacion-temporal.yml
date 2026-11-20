@@ -1,0 +1,18 @@
+name: Validación temporal
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validacion-temporal:
+    name: Validación temporal (JSON y formato)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validar JSON y formato del cambio
+        run: node scripts/validar-temporal.mjs

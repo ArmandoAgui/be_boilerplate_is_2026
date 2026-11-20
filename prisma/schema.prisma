@@ -38,7 +38,27 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
+  rol            Rol                  @default(RESIDENTE)
+  nombre         String               @default("Residente")
+  telefono       String?
+  unidades            UsuarioUnidad[]
+  reservas             Reserva[]
+  autorizaciones       AutorizacionVisita[]
+  ingresosRegistrados  MovimientoVisita[] @relation("IngresosRegistrados")
+  salidasRegistradas   MovimientoVisita[] @relation("SalidasRegistradas")
+  refreshTokens        RefreshToken[]
+  incidenciasCreadas   Incidencia[]        @relation("ResidenteIncidencias")
+  incidenciasAsignadas Incidencia[]        @relation("ResponsableIncidencias")
+  historialIncidencias HistorialIncidencia[] @relation("ActorHistorialIncidencia")
+  paquetesRegistrados Paquete[] @relation("PaquetesRegistrados")
+  paquetesEntregados  Paquete[] @relation("PaquetesEntregados")
+  asambleasCreadas    Asamblea[]
+  comunicadosCreados  Comunicado[]
+  lecturasComunicado  LecturaComunicado[]
+  notificaciones     Notificacion[]
+  preferenciaDirectorio PreferenciaDirectorio?
+  pagos                 Pago[]
+  auditorias            AuditoriaAdministrativa[]
 
   @@map("users")
 }
@@ -59,4 +79,541 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// Base compartida mínima del PDF, un solo condominio. Sin administración pública de roles.
+enum Rol {
+  RESIDENTE
+  ADMINISTRADOR
+  SEGURIDAD
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+}
+
+model Torre {
+  id        String    @id @default(uuid()) @db.Uuid
+  nombre    String    @unique @db.VarChar(30)
+  comunicados Comunicado[]
+  secciones Seccion[]
+  unidades  Unidad[]
+}
+
+model Seccion {
+  id       String   @id @default(uuid()) @db.Uuid
+  nombre   String   @db.VarChar(30)
+  torreId  String   @db.Uuid
+  torre    Torre    @relation(fields: [torreId], references: [id], onDelete: Restrict)
+  unidades Unidad[]
+  comunicados Comunicado[]
+
+  @@unique([torreId, nombre])
+  @@unique([id, torreId])
+}
+
+model Unidad {
+  id             String               @id @default(uuid()) @db.Uuid
+  codigo         String               @unique
+  torreId        String               @db.Uuid
+  seccionId      String               @db.Uuid
+  cuotaMensual   Decimal              @db.Decimal(10, 2)
+  activa         Boolean              @default(true)
+  torre          Torre                @relation(fields: [torreId], references: [id], onDelete: Restrict)
+  seccion        Seccion              @relation(fields: [seccionId, torreId], references: [id, torreId], onDelete: Restrict)
+  usuarios       UsuarioUnidad[]
+  reservas       Reserva[]
+  autorizaciones AutorizacionVisita[]
+  movimientos    MovimientoVisita[]
+  paquetes       Paquete[]
+  cuotas         Cuota[]
+  incidencias    Incidencia[]
+  participacionesVoto  ParticipacionVoto[]
+}
+
+model UsuarioUnidad {
+  id       String @id @default(uuid()) @db.Uuid
+  userId   String @db.Uuid
+  unidadId String @db.Uuid
+  user     User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  unidad   Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, unidadId])
+  @@index([unidadId])
+}
+
+model AreaComun {
+  id        String        @id @default(uuid()) @db.Uuid
+  nombre    String        @unique @db.VarChar(60)
+  capacidad Int
+  activa    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  horarios  HorarioArea[]
+  reservas  Reserva[]
+  incidencias Incidencia[]
+}
+
+model HorarioArea {
+  id         String    @id @default(uuid()) @db.Uuid
+  areaId     String    @db.Uuid
+  diaSemana  Int
+  horaInicio String    @db.VarChar(5)
+  horaFin    String    @db.VarChar(5)
+  area       AreaComun @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@index([areaId, diaSemana])
+}
+
+model Reserva {
+  id          String        @id @default(uuid()) @db.Uuid
+  codigo      String        @unique @default(dbgenerated("reserva_codigo()"))
+  areaId      String        @db.Uuid
+  unidadId    String?       @db.Uuid
+  userId      String        @db.Uuid
+  inicio      DateTime      @db.Timestamptz(3)
+  fin         DateTime      @db.Timestamptz(3)
+  asistentes  Int
+  estado      EstadoReserva @default(PENDIENTE)
+  canceladaAt DateTime?     @db.Timestamptz(3)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  area        AreaComun     @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  unidad      Unidad?       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([areaId, inicio, fin])
+  @@index([unidadId, estado, inicio])
+  @@index([userId, estado, inicio])
+}
+
+// Módulo 4 — Control de acceso de visitas (H13).
+enum EstadoAutorizacion {
+  PENDIENTE
+  VIGENTE
+  USADA
+  CANCELADA
+}
+
+model AutorizacionVisita {
+  id                 String             @id @default(uuid()) @db.Uuid
+  residenteId        String             @db.Uuid
+  unidadId           String             @db.Uuid
+  visitanteNombre    String             @db.VarChar(100)
+  visitanteDocumento String             @db.VarChar(20)
+  inicio             DateTime           @db.Timestamptz(3)
+  fin                DateTime           @db.Timestamptz(3)
+  // Vencida no se almacena: es VIGENTE con fin anterior a ahora. Guardarla
+  // obligaría a una tarea programada que mantuviera la columna al día.
+  estado             EstadoAutorizacion @default(VIGENTE)
+  canceladaAt        DateTime?          @db.Timestamptz(3)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  residente          User               @relation(fields: [residenteId], references: [id], onDelete: Restrict)
+  unidad             Unidad             @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  movimientos        MovimientoVisita[]
+
+  @@index([residenteId, estado, inicio])
+  // Seguridad busca en la puerta entre las vigentes dentro de su ventana (H14).
+  @@index([estado, fin])
+  @@index([visitanteDocumento])
+}
+
+enum EstadoCuota {
+  ANULADA
+  PENDIENTE
+  PAGADA
+}
+
+model Cuota {
+  id               String      @id @default(uuid()) @db.Uuid
+  unidadId         String      @db.Uuid
+  concepto         String      @default("Cuota de mantenimiento") @db.VarChar(60)
+  periodo          String      @db.VarChar(7)
+  monto            Decimal     @db.Decimal(10, 2)
+  fechaVencimiento DateTime    @db.Date
+  estado           EstadoCuota @default(PENDIENTE)
+  recargoAplicado  Decimal     @default(0) @db.Decimal(10, 2)
+  fechaPago        DateTime?   @db.Timestamptz(3)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  unidad           Unidad      @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  pagos            Pago[]
+
+  @@unique([unidadId, periodo, concepto])
+  @@index([unidadId, estado])
+}
+
+enum EstadoPago {
+  PROCESANDO
+  APROBADO
+  RECHAZADO
+}
+
+// H2: un intento de pago con la pasarela simulada. Nunca guarda el número
+// completo de la tarjeta ni el código de seguridad: solo los últimos 4 dígitos.
+model Pago {
+  id             String     @id @default(uuid()) @db.Uuid
+  // Correlativo que alimenta la referencia PAG-AAAAMMDD-000001.
+  numero         Int        @unique @default(autoincrement())
+  referencia     String     @unique @db.VarChar(20)
+  cuotaId        String     @db.Uuid
+  userId         String     @db.Uuid
+  monto          Decimal    @db.Decimal(10, 2)
+  ultimos4       String     @db.Char(4)
+  idempotencyKey String     @unique @db.Uuid
+  estado         EstadoPago @default(PROCESANDO)
+  motivoRechazo  String?    @db.VarChar(100)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  cuota          Cuota      @relation(fields: [cuotaId], references: [id], onDelete: Restrict)
+  user           User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([cuotaId])
+  @@index([userId])
+}
+
+enum LugarTipo {
+  UNIDAD
+  AREA_COMUN
+}
+
+enum Categoria {
+  FUGA
+  ELECTRICIDAD
+  ASCENSOR
+  LIMPIEZA
+  SEGURIDAD
+  OTRO
+}
+
+enum Prioridad {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum EstadoIncidencia {
+  ABIERTA
+  ASIGNADA
+  EN_PROCESO
+  RESUELTA
+}
+
+enum CampoHistorial {
+  ESTADO
+  PRIORIDAD
+  RESPONSABLE
+}
+
+model Incidencia {
+  id            String           @id @default(uuid()) @db.Uuid
+  codigo        String           @unique(map: "incidencias_codigo_key") @default(dbgenerated("incidencia_codigo()")) @db.VarChar(32)
+  residenteId   String           @map("residente_id") @db.Uuid
+  lugarTipo     LugarTipo        @map("lugar_tipo")
+  unidadId      String?          @map("unidad_id") @db.Uuid
+  areaId        String?          @map("area_id") @db.Uuid
+  categoria     Categoria
+  descripcion   String           @db.VarChar(500)
+  prioridad     Prioridad?
+  estado        EstadoIncidencia @default(ABIERTA)
+  responsableId String?          @map("responsable_id") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  residente    User                  @relation("ResidenteIncidencias", fields: [residenteId], references: [id], onDelete: Restrict)
+  responsable  User?                 @relation("ResponsableIncidencias", fields: [responsableId], references: [id], onDelete: Restrict)
+  unidad       Unidad?               @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  area         AreaComun?            @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  evidencias   EvidenciaIncidencia[]
+  historial    HistorialIncidencia[]
+
+  @@index([residenteId, createdAt(sort: Desc)], map: "incidencias_residente_created_at_idx")
+  @@index([responsableId], map: "incidencias_responsable_id_idx")
+  @@index([unidadId], map: "incidencias_unidad_id_idx")
+  @@index([areaId], map: "incidencias_area_id_idx")
+  @@map("incidencias")
+}
+
+model EvidenciaIncidencia {
+  id            String     @id @default(uuid()) @db.Uuid
+  incidenciaId  String     @map("incidencia_id") @db.Uuid
+  ruta          String     @unique(map: "evidencias_incidencia_ruta_key") @db.VarChar(255)
+  mime          String     @db.VarChar(20)
+  tamanoBytes   Int        @map("tamano_bytes")
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incidencia Incidencia @relation(fields: [incidenciaId], references: [id], onDelete: Restrict)
+
+  @@index([incidenciaId], map: "evidencias_incidencia_incidencia_id_idx")
+  @@map("evidencias_incidencia")
+}
+
+model HistorialIncidencia {
+  id             String         @id @default(uuid()) @db.Uuid
+  incidenciaId   String         @map("incidencia_id") @db.Uuid
+  campo          CampoHistorial
+  valorAnterior  String?        @map("valor_anterior") @db.VarChar(500)
+  valorNuevo     String         @map("valor_nuevo") @db.VarChar(500)
+  actorId        String         @map("actor_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incidencia Incidencia @relation(fields: [incidenciaId], references: [id], onDelete: Restrict)
+  actor      User       @relation("ActorHistorialIncidencia", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([incidenciaId, createdAt(sort: Desc)], map: "historial_incidencia_incidencia_created_at_idx")
+  @@index([actorId], map: "historial_incidencia_actor_id_idx")
+  @@map("historial_incidencia")
+}
+
+// H14 — Bitácora de accesos. Registra a todo el que entra, con autorización o sin ella.
+enum Condicion {
+  PREAUTORIZADA
+  SIN_AUTORIZACION
+}
+
+model MovimientoVisita {
+  id                 String              @id @default(uuid()) @db.Uuid
+  // Reutilizable durante la vigencia; índice parcial limita a un ingreso abierto.
+  autorizacionId     String?             @db.Uuid
+  unidadId           String              @db.Uuid
+  // Se copian en lugar de leerse de la autorización: la bitácora debe decir a
+  // quién se dejó entrar, aunque después se edite o se borre el origen.
+  visitanteNombre    String              @db.VarChar(100)
+  visitanteDocumento String              @db.VarChar(20)
+  condicion          Condicion
+  ingresoAt          DateTime            @default(now()) @db.Timestamptz(3)
+  // Nulo significa que el visitante sigue dentro. Es la base de H15.
+  salidaAt           DateTime?           @db.Timestamptz(3)
+  ingresoPorId       String              @db.Uuid
+  salidaPorId        String?             @db.Uuid
+  autorizacion       AutorizacionVisita? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
+  unidad             Unidad              @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  ingresoPor         User                @relation("IngresosRegistrados", fields: [ingresoPorId], references: [id], onDelete: Restrict)
+  salidaPor          User?               @relation("SalidasRegistradas", fields: [salidaPorId], references: [id], onDelete: Restrict)
+
+  @@index([salidaAt])
+}
+
+
+// H20/H21 — Convocatorias, agenda y votación por unidad.
+enum EstadoAsamblea {
+  BORRADOR
+  PUBLICADA
+}
+
+model Asamblea {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo      String         @db.VarChar(100)
+  fechaAt     DateTime       @db.Timestamptz(3)
+  descripcion String?        @db.VarChar(500)
+  estado      EstadoAsamblea @default(BORRADOR)
+  creadorId   String         @db.Uuid
+  publicadaAt DateTime?      @db.Timestamptz(3)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+
+  creador User           @relation(fields: [creadorId], references: [id], onDelete: Restrict)
+  temas   TemaVotacion[]
+
+  @@index([estado, fechaAt])
+  @@map("asambleas")
+}
+
+model TemaVotacion {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  asambleaId String   @db.Uuid
+  pregunta   String   @db.VarChar(150)
+  aperturaAt DateTime @db.Timestamptz(3)
+  cierreAt   DateTime @db.Timestamptz(3)
+  notificadoApertura Boolean @default(false) @map("notificado_apertura")
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  asamblea      Asamblea             @relation(fields: [asambleaId], references: [id], onDelete: Restrict)
+  opciones      OpcionVoto[]
+  participaciones ParticipacionVoto[]
+  votos         Voto[]
+
+  @@index([asambleaId])
+  @@map("temas_votacion")
+}
+
+model OpcionVoto {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  temaId String @db.Uuid
+  texto  String @db.VarChar(100)
+
+  tema  TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
+  votos Voto[]
+  participaciones ParticipacionVoto[]
+
+  @@unique([temaId, texto])
+  @@map("opciones_voto")
+}
+
+model ParticipacionVoto {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  temaId    String   @db.Uuid
+  unidadId  String   @db.Uuid
+  opcionId  String?  @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
+  unidad Unidad       @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  opcion OpcionVoto?   @relation(fields: [opcionId], references: [id], onDelete: Restrict)
+
+  @@unique([unidadId, temaId])
+  @@map("participaciones_voto")
+}
+
+model Voto {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  temaId   String @db.Uuid
+  opcionId String @db.Uuid
+
+  tema   TemaVotacion @relation(fields: [temaId], references: [id], onDelete: Restrict)
+  opcion OpcionVoto   @relation(fields: [opcionId], references: [id], onDelete: Restrict)
+
+  @@index([temaId, opcionId])
+  @@map("votos")
+}
+
+
+// H16 — Modelo compartido de paquetería. H19 reutiliza esta tabla y enum.
+enum EstadoPaquete {
+  ANULADO
+  PENDIENTE
+  ENTREGADO
+}
+
+model Paquete {
+  id String @id @default(uuid()) @db.Uuid
+  codigo          String        @unique @db.VarChar(20)
+  unidadId        String        @db.Uuid
+  empresa         String        @db.VarChar(60)
+  descripcion     String?       @db.VarChar(120)
+  recibidoAt      DateTime      @default(now()) @db.Timestamptz(3)
+  estado          EstadoPaquete @default(PENDIENTE)
+  entregadoAt     DateTime?     @db.Timestamptz(3)
+  retiraNombre    String?       @db.VarChar(100)
+  retiraDocumento String?       @db.VarChar(20)
+  registradoPorId String        @db.Uuid
+  entregadoPorId  String?       @db.Uuid
+  retiraResidenteId String?     @db.Uuid
+  correccionMotivo String?      @db.VarChar(300)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  unidad        Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  registradoPor User   @relation("PaquetesRegistrados", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  entregadoPor  User?  @relation("PaquetesEntregados", fields: [entregadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([estado, recibidoAt])
+  @@index([unidadId, recibidoAt])
+}
+
+// EP-07 — H23 publica; H24 registra lecturas.
+enum Alcance {
+  TODOS
+  TORRE
+  SECCION
+}
+
+model Comunicado {
+  id String @id @default(uuid()) @db.Uuid
+  titulo String @db.VarChar(100)
+  contenido String @db.VarChar(2000)
+  alcance Alcance
+  torreId String? @db.Uuid
+  seccionId String? @db.Uuid
+  autorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  torre Torre? @relation(fields: [torreId], references: [id], onDelete: Restrict)
+  seccion Seccion? @relation(fields: [seccionId], references: [id], onDelete: Restrict)
+  autor User @relation(fields: [autorId], references: [id], onDelete: Restrict)
+  lecturas LecturaComunicado[]
+  @@index([createdAt, id])
+  @@index([torreId])
+  @@index([seccionId])
+}
+
+model LecturaComunicado {
+  id String @id @default(uuid()) @db.Uuid
+  comunicadoId String @db.Uuid
+  userId String @db.Uuid
+  leidoAt DateTime @default(now()) @db.Timestamptz(3)
+  comunicado Comunicado @relation(fields: [comunicadoId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@unique([comunicadoId, userId])
+  @@index([userId])
+}
+
+// H27 define la bandeja; H28 reutiliza este catálogo y modelo para crear avisos.
+enum ModuloOrigen {
+  CUOTAS
+  PAQUETERIA
+  COMUNICADOS
+  ASAMBLEAS
+  INCIDENCIAS
+}
+
+enum TipoEvento {
+  CUOTA_POR_VENCER
+  PAQUETE_RECIBIDO
+  COMUNICADO_NUEVO
+  VOTACION_ABIERTA
+  INCIDENCIA_RESUELTA
+}
+
+enum EstadoNotificacion {
+  NO_LEIDA
+  LEIDA
+}
+
+model Notificacion {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  moduloOrigen ModuloOrigen       @map("modulo_origen")
+  tipoEvento   TipoEvento         @map("tipo_evento")
+  titulo       String             @db.VarChar(100)
+  mensaje      String             @db.VarChar(300)
+  referenciaId String?            @map("referencia_id") @db.Uuid
+  claveEvento  String             @map("clave_evento") @db.VarChar(120)
+  estado       EstadoNotificacion @default(NO_LEIDA)
+  leidaAt      DateTime?          @map("leida_at") @db.Timestamptz(3)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, claveEvento])
+  @@index([userId, createdAt])
+  @@map("notificaciones")
+}
+model PreferenciaDirectorio {
+  userId          String   @id @db.Uuid
+  visible         Boolean  @default(false)
+  mostrarTelefono Boolean  @default(false)
+  mostrarCorreo   Boolean  @default(false)
+  mostrarUnidad   Boolean  @default(false)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("preferencias_directorio")
+}
+
+model AuditoriaAdministrativa {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId String @db.Uuid
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  recurso String
+  recursoId String @db.Uuid
+  accion String
+  motivo String @db.VarChar(300)
+  anterior Json
+  nuevo Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 }
