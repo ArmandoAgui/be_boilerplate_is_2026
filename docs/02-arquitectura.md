@@ -15,17 +15,54 @@ flowchart LR
 
 ## Stack
 
-TypeScript; Next.js 16.4.6 y React 19.2.8; NestJS 12, Swagger y validación de DTO; Prisma 7 con adapter-pg; PostgreSQL 18. Docker Engine y Compose V2; Caddy 2; Ubuntu Server 24.04 amd64 en EC2. Los package-lock fijan dependencias, y deploy/base-images.env fija las imágenes por digest. Vitest y Playwright para pruebas.
+| Capa | Tecnología | Versión |
+|---|---|---|
+| Frontend | Next.js / React | 16.4.6 / 19.2.8 |
+| Backend | NestJS / Node.js | 12.0.3 / 24 |
+| ORM | Prisma / adaptador PostgreSQL | 7.10.1 / 7.10.0 |
+| Base de datos | PostgreSQL | 18 |
+| Contenedores | Docker Engine / plugin Compose | 29.1.3 / 5.6.1 en el entorno local verificado |
+| HTTPS y proxy | Caddy | 2, imagen fijada por digest |
+| Servidor | Ubuntu Server, amd64 | 24.04 LTS |
 
-## Estructura
+Las versiones de dependencias exactas están en package-lock.json; las imágenes base se fijan en deploy/base-images.env. Los comandos utilizan `docker compose` (plugin; compatible con Compose V2 y posteriores), no el binario antiguo docker-compose.
 
-Backend: src/auth, users, prisma, reservas, cuotas, incidencias, visitas, paquetes, asamblea, comunicados, directorio, notificaciones, reportes, administracion y health; prisma/schema.prisma y migrations; test/ para HTTP; deploy/ para Compose, servidor, seed y respaldo; docs/ para manuales.
+## Estructura de carpetas
 
-Frontend: app/ para rutas, Server Actions y proxies privados; components/ por módulo; lib/ para contratos/sesión; tests/ para componentes/reglas y e2e/ para navegador.
+```text
+be_boilerplate_is_2026/
+├── src/
+│   ├── auth/ users/ prisma/ health/ config/
+│   ├── cuotas/ pagos/ reservas/ incidencias/ visitas/ paquetes/
+│   └── asambleas/ comunicados/ directorio/ notificaciones/ reportes/ administracion/
+├── prisma/
+│   ├── schema.prisma
+│   ├── migrations/
+│   └── seed.ts
+├── deploy/
+│   ├── compose.production.yml / Caddyfile / Dockerfile en raíz
+│   ├── local.py / plataforma.py / seed-demo.mjs
+│   └── tests/ systemd/ aws/
+├── test/
+└── docs/
+    ├── 01-guia-de-uso.md ... 09-problemas-conocidos.md
+    └── img/
 
-## Decisiones
+fe_boilerplate_is_2026/
+├── app/
+│   ├── (plataforma)/
+│   ├── actions/
+│   └── api/
+├── components/
+├── lib/
+├── tests/
+├── e2e/
+└── docs/
+```
 
-| Decisión | Alternativa | Motivo |
+## Decisiones técnicas
+
+| Decisión | Alternativas consideradas | Motivo |
 |---|---|---|
 | Un único condominio y vínculos N:M | Multiempresa | Alcance del PO; permite varias unidades/residentes sin duplicar usuarios. |
 | Next en servidor y JWT en cookie HttpOnly | JWT en localStorage | El JavaScript del navegador no recibe el token; las acciones autorizan en servidor. |

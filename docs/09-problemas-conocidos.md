@@ -1,6 +1,6 @@
 # Problemas conocidos
 
-| Problema / límite | Cómo se reproduce | Impacto | Relación |
+| Problema | Cómo se reproduce | Impacto | Historia relacionada |
 |---|---|---|---|
 | Publicación 1.0.0 pendiente mientras los PR de release no estén aprobados/fusionados | Comparar main/develop y etiquetas antes del cierre | Alto para entrega formal | Todas |
 | Swagger no accesible en el despliegue previo | GET /api/docs antes de activar el Caddy de esta release devuelve 404 | Alto; corregido en esta rama, pendiente de desplegar | API/documentación |

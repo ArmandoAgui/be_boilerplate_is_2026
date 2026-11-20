@@ -4,11 +4,19 @@
 
 Git, Python 3.10+, Docker Engine con Compose V2 y Buildx, conexión a Internet para imágenes/dependencias/fuentes. En Windows usar WSL2 y Docker Desktop integrado, contenedores Linux. Para ejecutar Node fuera de Docker: Node 24. No reutilizar una base real para pruebas de integración.
 
-## Plataforma completa con Docker Compose
+## Pasos
+
+1. Clonar ambos repositorios y seleccionar la rama de entrega; mientras se revisa usar release/1.0.0, y después de publicarla usar main.
+2. Desde backend ejecutar el asistente de Compose: genera las variables y secretos locales en .local-platform/platform.env y .local-platform/secrets. No hace falta copiar .env para este modo; la alternativa sin Docker sí utiliza .env.example.
+3. Con --build se construyen y levantan frontend, API, PostgreSQL, migraciones y Caddy.
+4. Con --seed se cargan los roles, usuarios y escenarios mediante el mismo script del servidor.
+5. Abrir https://localhost:8443 y obtener las credenciales del archivo privado indicado abajo.
 
 ```bash
 git clone https://github.com/ArmandoAgui/be_boilerplate_is_2026.git
 git clone https://github.com/ArmandoAgui/fe_boilerplate_is_2026.git
+git -C be_boilerplate_is_2026 switch release/1.0.0
+git -C fe_boilerplate_is_2026 switch release/1.0.0
 cd be_boilerplate_is_2026
 python3 deploy/local.py --frontend ../fe_boilerplate_is_2026 --build --seed
 ```
@@ -30,19 +38,33 @@ Swagger: https://localhost:8443/api/docs. Credenciales nuevas en `.local-platfor
 
 ## Variables de entorno
 
-| Variable | Uso |
-|---|---|
-| DATABASE_URL | Conexión Prisma/pg; Compose del servidor la arma desde secretos |
-| JWT_SECRET, JWT_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN_DAYS | Firma y duración de sesiones |
-| PORT, NODE_ENV, UPLOADS_DIR | Puerto, entorno y fotos privadas |
-| BCRYPT_SALT_ROUNDS | Costo de hash |
-| CUOTA_MENSUAL_USD | Tarifa global; recargo único 5% |
-| CORS_ORIGIN | Origen exacto del frontend, sin ruta |
-| API_URL | Backend privado consumido por Next; no usar NEXT_PUBLIC |
-| SEED_DEMO, SEED_CREDENTIALS_FILE | Ejecución explícita del seed y archivo privado de credenciales |
+| Variable | Descripción | Ejemplo |
+|---|---|---|
+| DATABASE_URL | Conexión Prisma/pg; en servidor se construye desde archivos de secretos | postgresql://USUARIO:CLAVE@localhost:5432/sonnet5 |
+| JWT_SECRET | Secreto privado de firma JWT | Generar con openssl rand -base64 32; no publicar el resultado |
+| JWT_EXPIRES_IN | Duración de acceso | 15m |
+| REFRESH_TOKEN_EXPIRES_IN_DAYS | Duración de renovación | 7 |
+| PORT | Puerto de API | 3000 |
+| NODE_ENV | Entorno de ejecución | development en host; production en contenedor |
+| UPLOADS_DIR | Fotografías privadas | ./uploads en host; /uploads en contenedor |
+| BCRYPT_SALT_ROUNDS | Costo de hash | 12 |
+| CUOTA_MENSUAL_USD | Tarifa mensual global | 50.00 |
+| CORS_ORIGIN | Origen exacto del frontend | http://localhost:3001 en desarrollo |
+| API_URL | Backend consumido en servidor por Next | http://localhost:3000/api/v1/ en desarrollo |
+| SEED_DEMO | Activa explícitamente la creación de datos ficticios | true solo al ejecutar seed |
+| SEED_CREDENTIALS_FILE | Archivo privado de credenciales del seed | ./.seed-private/cuentas-qa.json |
 
 Las plantillas .env.example contienen nombres y valores de ejemplo para desarrollo. Cambiar los secretos antes de uso real. El seed no corre al iniciar la aplicación. El script histórico prisma/seed.ts solo delega a la implementación común.
 
-## Pruebas
+## Pruebas automatizadas
 
-En cada repositorio: `npm test`, `npm run typecheck`, `npm run lint` y `npm run build`. Backend: unitarias src/**/*.spec.ts y HTTP test/*.e2e-spec.ts; frontend: tests/ y e2e/. Integración requiere TEST_DATABASE_URL de una base aislada (nombre permitido por las protecciones de las suites), migraciones previas y `npm run test:e2e`. Nunca apuntar TEST_DATABASE_URL a AWS ni al volumen local con datos que se quieran conservar. Los recorridos Playwright usan sus fixtures y configuración; consultar playwright.config.ts para puertos. Las suites HTTP comparten BD y se ejecutan sin paralelismo entre archivos; una interrupción puede dejar fixtures, ver problemas conocidos.
+En cada repositorio:
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
+
+Backend: unitarias src/**/*.spec.ts y HTTP test/*.e2e-spec.ts; frontend: tests/ y e2e/. Integración requiere TEST_DATABASE_URL de una base aislada (nombre permitido por las protecciones de las suites), migraciones previas y `npm run test:e2e`. Nunca apuntar TEST_DATABASE_URL a AWS ni al volumen local con datos que se quieran conservar. Los recorridos Playwright usan sus fixtures y configuración; consultar playwright.config.ts para puertos. Las suites HTTP comparten BD y se ejecutan sin paralelismo entre archivos; una interrupción puede dejar fixtures, ver problemas conocidos.

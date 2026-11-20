@@ -7,7 +7,7 @@ Fuente: [schema.prisma](../prisma/schema.prisma). IDs UUID; importes Decimal USD
 ```mermaid
 erDiagram
     User {
-        string id
+        string id PK
         string email
         string passwordHash
         boolean isActive
@@ -15,43 +15,43 @@ erDiagram
         datetime updatedAt
     }
     RefreshToken {
-        string id
+        string id PK
         string tokenHash
-        string userId
+        string userId FK
         datetime expiresAt
         datetime revokedAt
         datetime createdAt
     }
     User ||--o{ RefreshToken : relacion
     Torre {
-        string id
+        string id PK
         string nombre
     }
     Seccion {
-        string id
+        string id PK
         string nombre
-        string torreId
+        string torreId FK
     }
     Torre ||--o{ Seccion : relacion
     Unidad {
-        string id
+        string id PK
         string codigo
-        string torreId
-        string seccionId
+        string torreId FK
+        string seccionId FK
         decimal cuotaMensual
         boolean activa
     }
     Torre ||--o{ Unidad : relacion
     Seccion ||--o{ Unidad : relacion
     UsuarioUnidad {
-        string id
-        string userId
-        string unidadId
+        string id PK
+        string userId FK
+        string unidadId FK
     }
     User ||--o{ UsuarioUnidad : relacion
     Unidad ||--o{ UsuarioUnidad : relacion
     AreaComun {
-        string id
+        string id PK
         string nombre
         int capacidad
         boolean activa
@@ -59,28 +59,28 @@ erDiagram
         datetime updatedAt
     }
     HorarioArea {
-        string id
-        string areaId
+        string id PK
+        string areaId FK
         int diaSemana
         string horaInicio
         string horaFin
     }
     AreaComun ||--o{ HorarioArea : relacion
     Reserva {
-        string id
+        string id PK
         string codigo
-        string areaId
-        string unidadId
-        string userId
+        string areaId FK
+        string unidadId FK
+        string userId FK
         datetime inicio
     }
     AreaComun ||--o{ Reserva : relacion
     Unidad |o--o{ Reserva : relacion
     User ||--o{ Reserva : relacion
     AutorizacionVisita {
-        string id
-        string residenteId
-        string unidadId
+        string id PK
+        string residenteId FK
+        string unidadId FK
         string visitanteNombre
         string visitanteDocumento
         datetime inicio
@@ -88,8 +88,8 @@ erDiagram
     User ||--o{ AutorizacionVisita : relacion
     Unidad ||--o{ AutorizacionVisita : relacion
     Cuota {
-        string id
-        string unidadId
+        string id PK
+        string unidadId FK
         string concepto
         string periodo
         decimal monto
@@ -97,30 +97,31 @@ erDiagram
     }
     Unidad ||--o{ Cuota : relacion
     Pago {
-        string id
+        string id PK
         int numero
         string referencia
-        string cuotaId
-        string userId
+        string cuotaId FK
+        string userId FK
         decimal monto
     }
     Cuota ||--o{ Pago : relacion
     User ||--o{ Pago : relacion
     Incidencia {
-        string id
+        string id PK
         string codigo
-        string residenteId
+        string residenteId FK
         string lugarTipo
-        string unidadId
-        string areaId
+        string unidadId FK
+        string areaId FK
+        string responsableId FK
     }
     User ||--o{ Incidencia : relacion
     User |o--o{ Incidencia : relacion
     Unidad |o--o{ Incidencia : relacion
     AreaComun |o--o{ Incidencia : relacion
     EvidenciaIncidencia {
-        string id
-        string incidenciaId
+        string id PK
+        string incidenciaId FK
         string ruta
         string mime
         int tamanoBytes
@@ -128,39 +129,41 @@ erDiagram
     }
     Incidencia ||--o{ EvidenciaIncidencia : relacion
     HistorialIncidencia {
-        string id
-        string incidenciaId
+        string id PK
+        string incidenciaId FK
         string campo
         string valorAnterior
         string valorNuevo
-        string actorId
+        string actorId FK
     }
     Incidencia ||--o{ HistorialIncidencia : relacion
     User ||--o{ HistorialIncidencia : relacion
     MovimientoVisita {
-        string id
-        string autorizacionId
-        string unidadId
+        string id PK
+        string autorizacionId FK
+        string unidadId FK
         string visitanteNombre
         string visitanteDocumento
         string condicion
+        string ingresoPorId FK
+        string salidaPorId FK
     }
     AutorizacionVisita |o--o{ MovimientoVisita : relacion
     Unidad ||--o{ MovimientoVisita : relacion
     User ||--o{ MovimientoVisita : relacion
     User |o--o{ MovimientoVisita : relacion
     Asamblea {
-        string id
+        string id PK
         string titulo
         datetime fechaAt
         string descripcion
         string estado
-        string creadorId
+        string creadorId FK
     }
     User ||--o{ Asamblea : relacion
     TemaVotacion {
-        string id
-        string asambleaId
+        string id PK
+        string asambleaId FK
         string pregunta
         datetime aperturaAt
         datetime cierreAt
@@ -168,61 +171,64 @@ erDiagram
     }
     Asamblea ||--o{ TemaVotacion : relacion
     OpcionVoto {
-        string id
-        string temaId
+        string id PK
+        string temaId FK
         string texto
     }
     TemaVotacion ||--o{ OpcionVoto : relacion
     ParticipacionVoto {
-        string id
-        string temaId
-        string unidadId
-        string opcionId
+        string id PK
+        string temaId FK
+        string unidadId FK
+        string opcionId FK
         datetime createdAt
     }
     TemaVotacion ||--o{ ParticipacionVoto : relacion
     Unidad ||--o{ ParticipacionVoto : relacion
     OpcionVoto |o--o{ ParticipacionVoto : relacion
     Voto {
-        string id
-        string temaId
-        string opcionId
+        string id PK
+        string temaId FK
+        string opcionId FK
     }
     TemaVotacion ||--o{ Voto : relacion
     OpcionVoto ||--o{ Voto : relacion
     Paquete {
-        string id
+        string id PK
         string codigo
-        string unidadId
+        string unidadId FK
         string empresa
         string descripcion
         datetime recibidoAt
+        string entregadoPorId FK
+        string registradoPorId FK
     }
     Unidad ||--o{ Paquete : relacion
     User ||--o{ Paquete : relacion
     User |o--o{ Paquete : relacion
     Comunicado {
-        string id
+        string id PK
         string titulo
         string contenido
         string alcance
-        string torreId
-        string seccionId
+        string torreId FK
+        string seccionId FK
+        string autorId FK
     }
     Torre |o--o{ Comunicado : relacion
     Seccion |o--o{ Comunicado : relacion
     User ||--o{ Comunicado : relacion
     LecturaComunicado {
-        string id
-        string comunicadoId
-        string userId
+        string id PK
+        string comunicadoId FK
+        string userId FK
         datetime leidoAt
     }
     Comunicado ||--o{ LecturaComunicado : relacion
     User ||--o{ LecturaComunicado : relacion
     Notificacion {
-        string id
-        string userId
+        string id PK
+        string userId FK
         string moduloOrigen
         string tipoEvento
         string titulo
@@ -230,7 +236,7 @@ erDiagram
     }
     User ||--o{ Notificacion : relacion
     PreferenciaDirectorio {
-        string userId
+        string userId PK,FK
         boolean visible
         boolean mostrarTelefono
         boolean mostrarCorreo
@@ -239,8 +245,8 @@ erDiagram
     }
     User ||--o{ PreferenciaDirectorio : relacion
     AuditoriaAdministrativa {
-        string id
-        string actorId
+        string id PK
+        string actorId FK
         string recurso
         string recursoId
         string accion
@@ -251,7 +257,7 @@ erDiagram
 
 ## Tablas
 
-| Modelo / tabla | Propósito | Campos principales |
+| Tabla | Descripción | Campos importantes |
 |---|---|---|
 | User / users | Identidad, hash de contraseña, rol y estado activo. | id, email, passwordHash, isActive, createdAt, updatedAt |
 | RefreshToken / refresh_tokens | Sesiones renovables, expiración y revocación. | id, tokenHash, userId, expiresAt, revokedAt, createdAt |
