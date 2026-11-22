@@ -10,7 +10,10 @@
   "files": [
     "src/reservas/services/reservas.entrega.spec.ts",
     "src/reservas/repositories/reservas.entrega.spec.ts",
-    "src/comunicados/comunicados.entrega.spec.ts"
+    "src/comunicados/comunicados.entrega.spec.ts",
+    "src/pagos/services/pagos.entrega.spec.ts",
+    "src/reportes/services/reportes.entrega.spec.ts",
+    "src/reportes/services/reporte-pdf.entrega.spec.ts"
   ],
   "include": [],
   "exclude": ["node_modules", "dist", ".jest-build"]
