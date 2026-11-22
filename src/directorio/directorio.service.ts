@@ -38,7 +38,7 @@ function proyectar(f: FilaDirectorio) {
 
 @Injectable()
 export class DirectorioService {
-  constructor(private readonly repo: DirectorioRepository) {}
+  constructor(private readonly repo: DirectorioRepository) { }
   private permitir(user: User) {
     if (user.rol !== 'RESIDENTE')
       throw new ForbiddenException(
@@ -66,6 +66,7 @@ export class DirectorioService {
     });
   }
   async buscar(user: User, dto: BuscarDirectorioDto) {
+    this.permitir(user);
     const termino = normalizar(dto.buscar);
     const filas = await this.repo.visibles();
     const coinciden = filas
@@ -96,6 +97,7 @@ export class DirectorioService {
     };
   }
   async ficha(user: User, id: string) {
+      this.permitir(user);
     const fila = await this.repo.visible(id);
     if (!fila) throw new NotFoundException('Perfil inexistente u oculto');
     return proyectar(fila);
