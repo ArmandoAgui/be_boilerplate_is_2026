@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./.jest-build",
+    "rootDir": ".",
+    "declaration": false,
+    "incremental": false,
+    "types": ["node"]
+  },
+  "files": [
+    "src/reservas/services/reservas.entrega.spec.ts",
+    "src/reservas/repositories/reservas.entrega.spec.ts",
+    "src/comunicados/comunicados.entrega.spec.ts"
+  ],
+  "include": [],
+  "exclude": ["node_modules", "dist", ".jest-build"]
+}
