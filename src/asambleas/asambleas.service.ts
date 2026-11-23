@@ -196,7 +196,6 @@ export class AsambleasService {
         unidadId: p.unidad.id,
         codigo: p.unidad.codigo,
         fecha: p.createdAt.toISOString(),
-        opcion: p.opcion?.texto ?? null,
       })),
     };
   }

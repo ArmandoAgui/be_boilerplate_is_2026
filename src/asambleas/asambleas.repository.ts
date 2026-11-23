@@ -112,7 +112,6 @@ export class AsambleasRepository {
       where: { temaId },
       select: {
         createdAt: true,
-        opcion: { select: { texto: true } },
         unidad: { select: { id: true, codigo: true } },
       },
       orderBy: [{ createdAt: 'asc' }, { unidad: { codigo: 'asc' } }],
