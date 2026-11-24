@@ -62,6 +62,7 @@ export class ReservasRepository {
           where: {
             id,
             userId,
+            eliminadaAt: null,
           },
         }),
       solicitud: (id: string) => tx.reserva.findUnique({ where: { id } }),
@@ -71,6 +72,21 @@ export class ReservasRepository {
         tx.reserva.updateMany({
           where: { id, estado: 'PENDIENTE' },
           data: { estado: 'CONFIRMADA' },
+        }),
+      rechazar: (
+        id: string,
+        administradorId: string,
+        motivo: string,
+        ahora: Date,
+      ) =>
+        tx.reserva.updateMany({
+          where: { id, estado: 'PENDIENTE' },
+          data: {
+            estado: 'RECHAZADA',
+            rechazadaAt: ahora,
+            rechazadaPorId: administradorId,
+            motivoRechazo: motivo,
+          },
         }),
       cancelar: (id: string, userId: string, ahora: Date) =>
         tx.reserva.updateMany({
@@ -83,6 +99,19 @@ export class ReservasRepository {
             },
           },
           data: { estado: 'CANCELADA', canceladaAt: ahora },
+        }),
+      eliminar: (id: string, userId: string, ahora: Date) =>
+        tx.reserva.updateMany({
+          where: {
+            id,
+            userId,
+            eliminadaAt: null,
+            OR: [
+              { estado: { in: ['CANCELADA', 'RECHAZADA'] } },
+              { fin: { lte: ahora } },
+            ],
+          },
+          data: { eliminadaAt: ahora },
         }),
       crearArea: (data: CrearAreaDto) =>
         tx.areaComun.create({
@@ -129,6 +158,7 @@ export class ReservasRepository {
   async mias(userId: string, query: ListarReservasDto) {
     const where: Prisma.ReservaWhereInput = {
       userId,
+      eliminadaAt: null,
       estado: query.estado,
     };
     const [filas, total] = await this.prisma.$transaction(

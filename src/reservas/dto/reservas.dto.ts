@@ -17,7 +17,7 @@ import {
   ValidateNested,
   ValidateIf,
 } from 'class-validator';
-import { PartialType } from '@nestjs/swagger';
+import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { EstadoReserva } from '@PrismaClient';
 
 export class HorarioDto {
@@ -61,4 +61,18 @@ export class ListarReservasDto {
   @IsOptional() @IsEnum(EstadoReserva) estado?: EstadoReserva;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pagina = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) tamanoPagina = 20;
+}
+
+export class RechazarReservaDto {
+  @ApiProperty({
+    description: 'Motivo que podrá consultar el residente',
+    minLength: 3,
+    maxLength: 500,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Length(3, 500)
+  motivo!: string;
 }
