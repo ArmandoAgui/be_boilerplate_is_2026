@@ -22,7 +22,7 @@ Se añaden tres migraciones aditivas: nuevo valor del enum, metadatos/restriccio
 
 Aplicar con `npm run prisma:deploy`, generar el cliente y compilar. En Docker el cliente se genera durante la construcción y el servicio `migrate` aplica las migraciones antes de iniciar la API. Publicar backend y frontend coordinadamente: el frontend anterior no reconoce la etiqueta `RECHAZADA`. Respaldar antes de publicar; no usar `migrate reset`, `db push` ni `down -v`. Un rollback debe considerar que pueden existir filas `RECHAZADA` y metadatos nuevos.
 
-Estos PR se proponen hacia `develop` para revisión de Heber. No cambian la versión desplegada en AWS ni crean una Release; la promoción aprobada hacia `main` y su despliegue son pasos posteriores.
+Hotfix `1.0.1` creado desde `main`. Su PR principal apunta a `main`, con revisión solicitada a Heber. Un PR de retorno separado lleva la corrección y la versión a `develop`, conservando allí sus pruebas y cambios aún no publicados. Integrar primero el PR a `main` y después el retorno a `develop`. No se ha fusionado, etiquetado ni desplegado automáticamente.
 
 ## Validación reproducible
 
@@ -46,6 +46,10 @@ La suite HTTP cubre motivos inválidos, permisos, conservación del historial, f
 - Node 24.22.2: instalación limpia, cliente generado y build correctos.
 - Las 21 migraciones se aplicaron en una base PostgreSQL 18 aislada; `prisma migrate diff --exit-code` no detectó diferencias con el esquema.
 - Suite de reservas HTTP/PostgreSQL: 21 casos aprobados, incluidos los seis casos nuevos de rechazo/eliminación.
-- `npm test`: 275 pruebas Vitest y 58 Jest aprobadas; typecheck correcto.
-- Lint aprobado con una advertencia previa en la prueba de directorio H25, ajena a este cambio.
+- `npm test` sobre la base de `main`: 254 pruebas Vitest aprobadas. Las suites Jest añadidas solo en `develop` se conservan y verifican en el PR de retorno.
+- Se ejecutan lint, typecheck y build sobre la base de producción, sin incorporar cambios ajenos de `develop`.
 - Recorrido real en navegador local: administrador rechaza, residente consulta el motivo y elimina del listado; tras recargar no reaparece y el total es cero. La fila permanece en BD. Sin errores de JavaScript ni desbordamiento horizontal a 390 px.
+
+## Retorno a develop
+
+Esta rama integra el commit del hotfix originado en `main` y conserva las pruebas adicionales de `develop`. El PR de retorno debe fusionarse después del PR de producción; no publica cambios ajenos hacia `main`. La aprobación previa correspondía al commit anterior: se solicita a Heber revisar esta actualización.
