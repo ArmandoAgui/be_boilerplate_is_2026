@@ -267,7 +267,7 @@ erDiagram
 | UsuarioUnidad / UsuarioUnidad | Asociación N:M entre residentes y unidades. | id, userId, unidadId |
 | AreaComun / AreaComun | Áreas reservables, capacidad y estado. | id, nombre, capacidad, activa, createdAt, updatedAt |
 | HorarioArea / HorarioArea | Franjas semanales de cada área. | id, areaId, diaSemana, horaInicio, horaFin |
-| Reserva / Reserva | Solicitud personal, intervalo y ciclo pendiente/confirmada/cancelada. | id, codigo, areaId, unidadId, userId, inicio |
+| Reserva / Reserva | Solicitud personal, intervalo y ciclo pendiente/confirmada/cancelada/rechazada. Eliminación lógica del listado con `eliminadaAt`; rechazo con motivo, fecha y administrador. | id, codigo, areaId, unidadId, userId, inicio |
 | AutorizacionVisita / AutorizacionVisita | Autorización vinculada al residente y unidad, con vigencia. | id, residenteId, unidadId, visitanteNombre, visitanteDocumento, inicio |
 | Cuota / Cuota | Cuota por unidad/período, recargo y pago/anulación. | id, unidadId, concepto, periodo, monto, fechaVencimiento |
 | Pago / Pago | Resultado simulado, idempotencia y últimos cuatro dígitos. | id, numero, referencia, cuotaId, userId, monto |
