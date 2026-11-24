@@ -92,6 +92,7 @@ enum EstadoReserva {
   PENDIENTE
   CONFIRMADA
   CANCELADA
+  RECHAZADA
 }
 
 model Torre {
@@ -178,6 +179,10 @@ model Reserva {
   asistentes  Int
   estado      EstadoReserva @default(PENDIENTE)
   canceladaAt DateTime?     @db.Timestamptz(3)
+  rechazadaAt DateTime?     @db.Timestamptz(3)
+  motivoRechazo String?     @db.VarChar(500)
+  rechazadaPorId String?    @db.Uuid
+  eliminadaAt DateTime?     @db.Timestamptz(3)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   area        AreaComun     @relation(fields: [areaId], references: [id], onDelete: Restrict)
