@@ -172,6 +172,227 @@ describe.skipIf(!url)('H5–H8 HTTP + PostgreSQL real', () => {
     }
     await app?.close();
   });
+  it('H6: solo admin rechaza pendientes; registra autor, motivo y fecha y el residente lo consulta', async () => {
+    const r = await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', residente)
+      .send(body())
+      .expect(201);
+    const ruta = `/api/v1/reservas/${r.body.id}/rechazo`;
+    await http().patch(ruta).send({ motivo: 'Mantenimiento' }).expect(401);
+    for (const token of [residente, vecino, seguridad])
+      await http()
+        .patch(ruta)
+        .set('Authorization', token)
+        .send({ motivo: 'Mantenimiento' })
+        .expect(403);
+    for (const dto of [
+      {},
+      { motivo: '  ' },
+      { motivo: 'ab' },
+      { motivo: 'a'.repeat(501) },
+      { motivo: 3 },
+      { motivo: 'Motivo', userId: users[2] },
+    ])
+      await http()
+        .patch(ruta)
+        .set('Authorization', admin)
+        .send(dto)
+        .expect(400);
+    await http()
+      .patch(ruta)
+      .set('Authorization', admin)
+      .send({ motivo: '  Mantenimiento del área  ' })
+      .expect(200);
+    const guardada = await prisma.reserva.findUniqueOrThrow({
+      where: { id: r.body.id },
+    });
+    expect(guardada.estado).toBe('RECHAZADA');
+    expect(guardada.rechazadaPorId).toBe(users[0]);
+    expect(guardada.motivoRechazo).toBe('Mantenimiento del área');
+    expect(guardada.rechazadaAt).toBeInstanceOf(Date);
+    expect(guardada.canceladaAt).toBeNull();
+    const mias = await http()
+      .get('/api/v1/reservas/mias?estado=RECHAZADA')
+      .set('Authorization', residente)
+      .expect(200);
+    expect(mias.body.datos[0].motivoRechazo).toBe('Mantenimiento del área');
+    const disponibilidad = await http()
+      .get(`/api/v1/areas/${areaId}/disponibilidad?fecha=${fechaReserva}`)
+      .set('Authorization', residente)
+      .expect(200);
+    expect(disponibilidad.body.bloques[12].estado).toBe('DISPONIBLE');
+    await aprobar(r.body.id).expect(409);
+    await http()
+      .patch(ruta)
+      .set('Authorization', admin)
+      .send({ motivo: 'Otro motivo' })
+      .expect(409);
+    await http()
+      .patch(`/api/v1/reservas/${randomUUID()}/rechazo`)
+      .set('Authorization', admin)
+      .send({ motivo: 'Motivo' })
+      .expect(404);
+  });
+  it('H6: aprobación y rechazo concurrentes no pueden sobrescribirse', async () => {
+    const r = await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', residente)
+      .send(body())
+      .expect(201);
+    const respuestas = await Promise.all([
+      aprobar(r.body.id),
+      http()
+        .patch(`/api/v1/reservas/${r.body.id}/rechazo`)
+        .set('Authorization', admin)
+        .send({ motivo: 'Mantenimiento' }),
+    ]);
+    expect(respuestas.map((r) => r.status).sort((a, b) => a - b)).toEqual([200, 409]);
+    const guardada = await prisma.reserva.findUniqueOrThrow({
+      where: { id: r.body.id },
+    });
+    expect(['CONFIRMADA', 'RECHAZADA']).toContain(guardada.estado);
+    expect(guardada.estado === 'RECHAZADA').toBe(guardada.rechazadaAt !== null);
+  });
+  it('H6: no permite rechazar confirmadas ni canceladas', async () => {
+    for (const estado of ['CONFIRMADA', 'CANCELADA'] as const) {
+      const r = await prisma.reserva.create({
+        data: {
+          areaId,
+          userId: users[1],
+          inicio: new Date(inicio),
+          fin: new Date(new Date(inicio).getTime() + 3600000),
+          asistentes: 1,
+          estado,
+          canceladaAt: estado === 'CANCELADA' ? new Date() : null,
+        },
+      });
+      await http()
+        .patch(`/api/v1/reservas/${r.id}/rechazo`)
+        .set('Authorization', admin)
+        .send({ motivo: 'Motivo' })
+        .expect(409);
+      expect(
+        (await prisma.reserva.findUniqueOrThrow({ where: { id: r.id } }))
+          .estado,
+      ).toBe(estado);
+    }
+  });
+  it('H7: solo creador elimina del listado; conserva fila, estado e historial y ajusta total', async () => {
+    const r = await http()
+      .post('/api/v1/reservas')
+      .set('Authorization', residente)
+      .send(body())
+      .expect(201);
+    await http()
+      .patch(`/api/v1/reservas/${r.body.id}/rechazo`)
+      .set('Authorization', admin)
+      .send({ motivo: 'Mantenimiento' })
+      .expect(200);
+    const ruta = `/api/v1/reservas/${r.body.id}`;
+    await http().delete(ruta).expect(401);
+    for (const token of [admin, seguridad])
+      await http().delete(ruta).set('Authorization', token).expect(403);
+    await http().delete(ruta).set('Authorization', vecino).expect(404);
+    await http().delete(ruta).set('Authorization', residente).expect(200);
+    const guardada = await prisma.reserva.findUniqueOrThrow({
+      where: { id: r.body.id },
+    });
+    expect(guardada.estado).toBe('RECHAZADA');
+    expect(guardada.motivoRechazo).toBe('Mantenimiento');
+    expect(guardada.eliminadaAt).toBeInstanceOf(Date);
+    const mias = await http()
+      .get('/api/v1/reservas/mias')
+      .set('Authorization', residente)
+      .expect(200);
+    expect(mias.body.total).toBe(0);
+    expect(mias.body.datos).toEqual([]);
+    await http().delete(ruta).set('Authorization', residente).expect(404);
+    await http()
+      .delete(`/api/v1/reservas/${randomUUID()}`)
+      .set('Authorization', residente)
+      .expect(404);
+  });
+  it('H7: eliminar no evita las 24 horas ni libera reservas pendientes, confirmadas o en curso', async () => {
+    for (const estado of ['PENDIENTE', 'CONFIRMADA'] as const) {
+      const r = await prisma.reserva.create({
+        data: {
+          areaId,
+          userId: users[1],
+          inicio: new Date(inicio),
+          fin: new Date(new Date(inicio).getTime() + 3600000),
+          asistentes: 1,
+          estado,
+        },
+      });
+      await http()
+        .delete(`/api/v1/reservas/${r.id}`)
+        .set('Authorization', residente)
+        .expect(409);
+      expect(
+        (await prisma.reserva.findUniqueOrThrow({ where: { id: r.id } }))
+          .eliminadaAt,
+      ).toBeNull();
+    }
+    const comienzo = new Date();
+    comienzo.setUTCMinutes(0, 0, 0);
+    const r = await prisma.reserva.create({
+      data: {
+        areaId,
+        userId: users[1],
+        inicio: comienzo,
+        fin: new Date(comienzo.getTime() + 3600000),
+        asistentes: 1,
+        estado: 'CONFIRMADA',
+      },
+    });
+    await http()
+      .delete(`/api/v1/reservas/${r.id}`)
+      .set('Authorization', residente)
+      .expect(409);
+    await http()
+      .patch(`/api/v1/reservas/${r.id}/cancelacion`)
+      .set('Authorization', residente)
+      .expect(409);
+    const guardada = await prisma.reserva.findUniqueOrThrow({
+      where: { id: r.id },
+    });
+    expect(guardada.estado).toBe('CONFIRMADA');
+    expect(guardada.eliminadaAt).toBeNull();
+  });
+  it('H7: elimina canceladas y finalizadas sin borrar los registros', async () => {
+    const fin = new Date(Date.now() - 3600000);
+    fin.setUTCMinutes(0, 0, 0);
+    for (const estado of ['CANCELADA', 'PENDIENTE', 'CONFIRMADA'] as const) {
+      const r = await prisma.reserva.create({
+        data: {
+          areaId,
+          userId: users[1],
+          inicio: new Date(fin.getTime() - 3600000),
+          fin,
+          asistentes: 1,
+          estado,
+          canceladaAt: estado === 'CANCELADA' ? new Date() : null,
+        },
+      });
+      await http()
+        .delete(`/api/v1/reservas/${r.id}`)
+        .set('Authorization', residente)
+        .expect(200);
+      expect(
+        (await prisma.reserva.findUniqueOrThrow({ where: { id: r.id } }))
+          .estado,
+      ).toBe(estado);
+    }
+    expect(await prisma.reserva.count({ where: { userId: users[1] } })).toBe(3);
+    expect(
+      (
+        await http()
+          .get('/api/v1/reservas/mias')
+          .set('Authorization', residente)
+      ).body.total,
+    ).toBe(0);
+  });
   it('health, login y roles del boilerplate', async () => {
     await http().get('/api/v1').expect(200);
     const u = await prisma.user.findUniqueOrThrow({ where: { id: users[1] } });

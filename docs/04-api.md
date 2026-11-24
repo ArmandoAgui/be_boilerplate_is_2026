@@ -52,6 +52,8 @@ Todas las rutas de las tablas incluyen el prefijo /api/v1. Los parámetros entre
 | GET | /api/v1/reservas/pendientes | Solicitudes por aprobar | Administrador |
 | PATCH | /api/v1/reservas/{id}/aprobacion | Confirmar solicitud disponible y sin deuda | Administrador |
 | PATCH | /api/v1/reservas/{id}/cancelacion | Cancelar con al menos 24 horas | Residente (creador) |
+| PATCH | /api/v1/reservas/{id}/rechazo | Rechazar solicitud pendiente con motivo | Administrador |
+| DELETE | /api/v1/reservas/{id} | Eliminar del listado canceladas, rechazadas o finalizadas; conserva historial | Residente (creador) |
 
 ### Módulo 3: Incidencias y mantenimiento
 

@@ -3,13 +3,14 @@ import {
   Controller,
   UseFilters,
   Get,
+  Delete,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ReservasHttpFilter } from '../filters/reservas-http.filter.js';
 import { CurrentUser } from '@Auth/decorators';
 import type { User } from '@PrismaClient';
@@ -20,6 +21,7 @@ import {
   CrearReservaDto,
   FechaDto,
   ListarReservasDto,
+  RechazarReservaDto,
 } from '../dto/reservas.dto.js';
 
 @UseFilters(ReservasHttpFilter)
@@ -81,6 +83,25 @@ export class ReservasController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.service.cancelar(user, id);
+  }
+  @Patch(':id/rechazo')
+  @ApiOperation({
+    summary: 'Rechazar una solicitud pendiente con motivo (administrador)',
+  })
+  rechazar(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RechazarReservaDto,
+  ) {
+    return this.service.rechazar(user, id, dto.motivo);
+  }
+  @Delete(':id')
+  @ApiOperation({
+    summary:
+      'Eliminar del listado una reserva propia cancelada, rechazada o finalizada; conserva historial',
+  })
+  eliminar(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.eliminar(user, id);
   }
 }
 @UseFilters(ReservasHttpFilter)

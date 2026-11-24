@@ -182,6 +182,41 @@ export class ReservasService {
       return { id, estado: 'CANCELADA', canceladaAt: ahora };
     });
   }
+  async rechazar(user: User, id: string, motivo: string) {
+    permitir(user.rol, 'ADMINISTRADOR');
+    return this.repo.transaccion(async (tx) => {
+      const solicitud = await tx.solicitud(id);
+      if (!solicitud) throw new NotFoundException('Reserva inexistente');
+      // Comparte el orden de bloqueos con aprobación y cancelación.
+      await tx.bloquearUsuario(solicitud.userId);
+      await tx.bloquearArea(solicitud.areaId);
+      const ahora = new Date();
+      if ((await tx.rechazar(id, user.id, motivo, ahora)).count !== 1)
+        throw new ConflictException(
+          'Solo se puede rechazar una solicitud pendiente',
+        );
+      return {
+        id,
+        estado: 'RECHAZADA',
+        motivoRechazo: motivo,
+        rechazadaAt: ahora,
+      };
+    });
+  }
+  async eliminar(user: User, id: string) {
+    permitir(user.rol, 'RESIDENTE');
+    return this.repo.transaccion(async (tx) => {
+      await tx.bloquearUsuario(user.id);
+      if (!(await tx.reserva(id, user.id)))
+        throw new NotFoundException('Reserva inexistente');
+      const ahora = new Date();
+      if ((await tx.eliminar(id, user.id, ahora)).count !== 1)
+        throw new ConflictException(
+          'Solo puedes eliminar del listado reservas canceladas, rechazadas o finalizadas. Para las activas debes respetar el plazo de cancelación de 24 horas',
+        );
+      return { id, eliminadaAt: ahora };
+    });
+  }
   async guardarArea(
     user: User,
     data: CrearAreaDto | EditarAreaDto,

@@ -44,7 +44,7 @@ describe('H6. Confirmar una reserva personal', () => {
     await repo.mias('propietario', { pagina: 1, tamanoPagina: 20 });
     expect(reserva.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: 'propietario', estado: undefined },
+        where: { userId: 'propietario', estado: undefined, eliminadaAt: null },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       }),
     );
@@ -63,12 +63,13 @@ describe('H6. Confirmar una reserva personal', () => {
   });
 });
 describe('H7. Cancelar una reserva personal', () => {
-  it('AC3: el historial conserva todos los estados y filtra por creador', async () => {
+  it('AC3: el listado conserva todos los estados no eliminados y filtra por creador', async () => {
     const { reserva, repo } = fixture();
     await repo.mias('propietario', { pagina: 1, tamanoPagina: 20 });
     expect(reserva.findMany.mock.calls[0][0].where).toEqual({
       userId: 'propietario',
       estado: undefined,
+      eliminadaAt: null,
     });
   });
   it('AC6: el filtro de cancelación incluye exactamente las 24 horas', async () => {
